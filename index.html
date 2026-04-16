@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>King's Law — Cabinet Juridique · San Andreas</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #080a0f;
+  --surface: #0e1018;
+  --gold: #c9a84c;
+  --gold-light: #e8c97a;
+  --gold-dim: rgba(201,168,76,0.08);
+  --gold-border: rgba(201,168,76,0.2);
+  --text: #e2ddd4;
+  --muted: #5a5f72;
+  --muted2: #3a3f55;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Cormorant Garamond', serif;
+  overflow-x: hidden;
+}
+
+/* ─── NOISE OVERLAY ─── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.6;
+}
+
+/* ─── HERO ─── */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 60px 24px;
+  text-align: center;
+}
+
+.hero::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-border), transparent);
+}
+
+/* Radial glow */
+.hero-glow {
+  position: absolute;
+  width: 600px; height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.hero-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 28px;
+  opacity: 0;
+  animation: fadeUp 0.8s 0.2s forwards;
+}
+
+.hero-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(52px, 10vw, 96px);
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  opacity: 0;
+  animation: fadeUp 0.9s 0.4s forwards;
+}
+
+.hero-title span { color: var(--gold); }
+
+.hero-subtitle {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: clamp(18px, 3vw, 24px);
+  color: var(--muted);
+  margin-top: 20px;
+  opacity: 0;
+  animation: fadeUp 0.9s 0.6s forwards;
+}
+
+.hero-divider {
+  width: 60px;
+  height: 1px;
+  background: var(--gold-border);
+  margin: 36px auto;
+  opacity: 0;
+  animation: fadeUp 0.8s 0.8s forwards;
+}
+
+.hero-desc {
+  max-width: 480px;
+  font-size: 17px;
+  color: var(--muted);
+  line-height: 1.7;
+  opacity: 0;
+  animation: fadeUp 0.9s 1s forwards;
+}
+
+/* ─── QUOTE ROTATOR ─── */
+.quotes-section {
+  padding: 80px 24px;
+  position: relative;
+  background: var(--surface);
+  border-top: 1px solid var(--muted2);
+  border-bottom: 1px solid var(--muted2);
+}
+
+.quotes-inner {
+  max-width: 760px;
+  margin: 0 auto;
+  text-align: center;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.quote-mark {
+  font-family: 'Playfair Display', serif;
+  font-size: 80px;
+  color: var(--gold);
+  line-height: 0.5;
+  margin-bottom: 24px;
+  opacity: 0.3;
+}
+
+.quote-text {
+  font-family: 'Cormorant Garamond', serif;
+  font-style: italic;
+  font-size: clamp(20px, 3vw, 28px);
+  color: var(--text);
+  line-height: 1.5;
+  transition: opacity 0.6s, transform 0.6s;
+}
+
+.quote-source {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-top: 20px;
+  transition: opacity 0.6s;
+}
+
+.quote-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 32px;
+  justify-content: center;
+}
+
+.quote-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--muted2);
+  cursor: pointer;
+  transition: background 0.3s;
+}
+.quote-dot.active { background: var(--gold); }
+
+/* ─── TARIFS ─── */
+.tarifs-section {
+  padding: 100px 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 60px;
+}
+
+.section-eyebrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-family: 'Playfair Display', serif;
+  font-size: clamp(32px, 5vw, 48px);
+  color: var(--text);
+}
+
+.tarif-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.tarif-card {
+  background: var(--surface);
+  border: 1px solid var(--muted2);
+  border-radius: 12px;
+  padding: 36px 32px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.3s, transform 0.3s;
+}
+
+.tarif-card:hover {
+  border-color: var(--gold-border);
+  transform: translateY(-4px);
+}
+
+.tarif-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.tarif-card:hover::before { opacity: 1; }
+
+.tarif-card.featured {
+  border-color: var(--gold-border);
+  background: var(--gold-dim);
+}
+.tarif-card.featured::before { opacity: 1; }
+
+.tarif-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin-bottom: 20px;
+}
+
+.tarif-name {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+.tarif-price {
+  font-family: 'Playfair Display', serif;
+  font-size: 40px;
+  color: var(--gold-light);
+  font-weight: 700;
+  line-height: 1;
+  margin: 20px 0;
+}
+
+.tarif-price sup {
+  font-size: 18px;
+  vertical-align: super;
+  color: var(--gold);
+}
+
+.tarif-note {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.tarif-tag {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--muted2);
+  color: var(--muted);
+}
+
+.tarif-tag.exo {
+  border-color: rgba(92,224,160,0.3);
+  color: #5ce0a0;
+  background: rgba(92,224,160,0.05);
+}
+
+/* ─── COMMIS D'OFFICE ─── */
+.commis-section {
+  background: var(--surface);
+  border-top: 1px solid var(--muted2);
+  border-bottom: 1px solid var(--muted2);
+  padding: 100px 24px;
+}
+
+.commis-inner {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.commis-inner .section-header { text-align: left; margin-bottom: 40px; }
+
+.commis-body {
+  font-size: 19px;
+  color: var(--muted);
+  line-height: 1.85;
+}
+
+.commis-body strong { color: var(--text); font-weight: 400; }
+
+.commis-articles {
+  margin-top: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.article-block {
+  display: flex;
+  gap: 20px;
+  padding: 20px 24px;
+  background: var(--bg);
+  border: 1px solid var(--muted2);
+  border-radius: 10px;
+  align-items: flex-start;
+  transition: border-color 0.3s;
+}
+
+.article-block:hover { border-color: var(--gold-border); }
+
+.article-ref {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: var(--gold);
+  text-transform: uppercase;
+  white-space: nowrap;
+  padding-top: 2px;
+  min-width: 90px;
+}
+
+.article-text {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.65;
+  font-style: italic;
+}
+
+/* ─── FOOTER ─── */
+footer {
+  padding: 48px 24px;
+  text-align: center;
+  border-top: 1px solid var(--muted2);
+}
+
+.footer-logo {
+  font-family: 'Playfair Display', serif;
+  font-size: 22px;
+  color: var(--gold);
+  margin-bottom: 12px;
+}
+
+.footer-note {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted2);
+}
+
+/* ─── ANIMATIONS ─── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.7s, transform 0.7s;
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-mono">Cabinet Juridique · État de San Andreas</div>
+  <h1 class="hero-title">KING'S <span>LAW</span></h1>
+  <p class="hero-subtitle">Henry King, Esquire — Membre du Barreau de San Andreas</p>
+  <div class="hero-divider"></div>
+  <p class="hero-desc">
+    Défense pénale, procédure civile et représentation devant toutes les juridictions
+    de l'État de San Andreas. Votre droit, défendu avec rigueur.
+  </p>
+</section>
+
+<!-- QUOTES -->
+<section class="quotes-section">
+  <div class="quotes-inner">
+    <div class="quote-mark">"</div>
+    <div class="quote-text" id="quote-text"></div>
+    <div class="quote-source" id="quote-source"></div>
+    <div class="quote-dots" id="quote-dots"></div>
+  </div>
+</section>
+
+<!-- TARIFS -->
+<section class="tarifs-section">
+  <div class="section-header reveal">
+    <div class="section-eyebrow">Honoraires</div>
+    <h2 class="section-title">Tarification du Cabinet</h2>
+  </div>
+  <div class="tarif-grid">
+
+    <div class="tarif-card reveal">
+      <div class="tarif-badge">Commis d'office</div>
+      <div class="tarif-name">Comparution immédiate</div>
+      <div class="tarif-price"><sup>$</sup>15,000</div>
+      <div class="tarif-note">
+        Représentation lors d'une comparution immédiate ou d'un plaider-coupable,
+        lorsque désigné d'office par les forces de l'ordre.
+      </div>
+      <span class="tarif-tag exo">Gratuit pour le client</span>
+    </div>
+
+    <div class="tarif-card featured reveal">
+      <div class="tarif-badge">Commis d'office</div>
+      <div class="tarif-name">Procès</div>
+      <div class="tarif-price"><sup>$</sup>20,000</div>
+      <div class="tarif-note">
+        Représentation complète lors d'une audience contradictoire devant le tribunal,
+        incluant plaidoirie et contre-interrogatoire.
+      </div>
+      <span class="tarif-tag exo">Gratuit pour le client</span>
+    </div>
+
+    <div class="tarif-card reveal">
+      <div class="tarif-badge">Client privé</div>
+      <div class="tarif-name">Mandat direct</div>
+      <div class="tarif-price"><sup>$</sup>20,000</div>
+      <div class="tarif-note">
+        Représentation sur mandat direct du client, toutes procédures confondues.
+        Taxe professionnelle de 20% applicable.
+      </div>
+      <span class="tarif-tag">Taxe 20% incluse</span>
+    </div>
+
+  </div>
+</section>
+
+<!-- COMMIS D'OFFICE -->
+<section class="commis-section">
+  <div class="commis-inner">
+    <div class="section-header reveal">
+      <div class="section-eyebrow">Droit procédural</div>
+      <h2 class="section-title">Qu'est-ce qu'un Commis d'Office ?</h2>
+    </div>
+    <div class="commis-body reveal">
+      Un avocat commis d'office est un avocat <strong>dûment enregistré au Barreau de l'État de San Andreas</strong>
+      ainsi qu'auprès des services fiscaux municipaux, qui intervient dans le cadre d'une procédure judiciaire
+      <strong>sans avoir été choisi ni mandaté par le prévenu</strong>.<br><br>
+      Dès lors qu'un Procureur intervient dans une procédure, <strong>les forces de l'ordre sont tenues
+      d'appeler un avocat</strong> — choisi par le prévenu ou, à défaut, commis d'office.
+      Cette présence n'est pas optionnelle : elle constitue un droit procédural fondamental
+      garanti par le Code de Procédures Pénales de l'État de San Andreas.
+    </div>
+
+    <div class="commis-articles reveal">
+      <div class="article-block">
+        <div class="article-ref">C.P.P. · Art. 4105</div>
+        <div class="article-text">
+          Dès lors qu'un Procureur intervient lors d'une procédure, un avocat (choisi par le prévenu ou,
+          à défaut, commis d'office) doit être obligatoirement appelé par les forces de l'ordre.
+        </div>
+      </div>
+      <div class="article-block">
+        <div class="article-ref">C.P.P. · Art. 4301</div>
+        <div class="article-text">
+          Toute personne poursuivie a le droit d'être assistée par un avocat à tous les stades de la procédure.
+        </div>
+      </div>
+      <div class="article-block">
+        <div class="article-ref">C.P.P. · Art. 4302</div>
+        <div class="article-text">
+          La défense a accès aux éléments de preuve dans des conditions garantissant l'égalité des armes.
+        </div>
+      </div>
+      <div class="article-block">
+        <div class="article-ref">C.P.P. · Art. 3101</div>
+        <div class="article-text">
+          Afin de garantir la défense de leurs clients, les avocats ont le droit d'interroger seul
+          leur client pendant un délai de maximum 20 minutes avant la procédure de plaider coupable.
+        </div>
+      </div>
+      <div class="article-block">
+        <div class="article-ref">VIe Amendement</div>
+        <div class="article-text">
+          L'accusé aura le droit de bénéficier de l'assistance d'un avocat pour sa défense.
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">King's Law</div>
+  <div class="footer-note">Barreau de San Andreas · Cabinet Juridique · État de San Andreas</div>
+</footer>
+
+<script>
+// ─── QUOTES ───
+const quotes = [
+  {
+    text: "Ne déclarez rien sans la présence de votre avocat. Chaque mot prononcé peut être retenu contre vous.",
+    source: "Maître Henry King"
+  },
+  {
+    text: "Toute personne est présumée innocente tant que sa culpabilité n'a pas été légalement établie.",
+    source: "C.P.P. — Article 1102"
+  },
+  {
+    text: "La charge de la preuve incombe à l'accusation, qui doit établir la culpabilité au-delà de tout doute raisonnable.",
+    source: "C.P.P. — Article 1103"
+  },
+  {
+    text: "Nul ne peut être contraint de témoigner contre lui-même dans un procès criminel.",
+    source: "Ve Amendement — Constitution des États-Unis"
+  },
+  {
+    text: "Toute personne poursuivie a le droit d'être assistée par un avocat à tous les stades de la procédure.",
+    source: "C.P.P. — Article 4301"
+  },
+  {
+    text: "Une personne ne peut être privée de sa vie, de sa liberté ou de ses biens sans une procédure légale régulière.",
+    source: "Constitution de San Andreas — Article I, Section 6"
+  },
+  {
+    text: "Il ne pourra être exigé de caution disproportionnée, ni imposé d'amendes excessives, ni infligé de peines cruelles ou inhabituelles.",
+    source: "VIIIe Amendement — Constitution des États-Unis"
+  },
+  {
+    text: "Gardez le silence. C'est votre droit le plus précieux au moment de votre arrestation.",
+    source: "Maître Henry King"
+  }
+];
+
+let currentQuote = 0;
+const textEl   = document.getElementById('quote-text');
+const sourceEl = document.getElementById('quote-source');
+const dotsEl   = document.getElementById('quote-dots');
+
+function renderDots() {
+  dotsEl.innerHTML = '';
+  quotes.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'quote-dot' + (i === currentQuote ? ' active' : '');
+    d.onclick = () => goTo(i);
+    dotsEl.appendChild(d);
+  });
+}
+
+function goTo(idx) {
+  textEl.style.opacity   = '0';
+  textEl.style.transform = 'translateY(10px)';
+  sourceEl.style.opacity = '0';
+  setTimeout(() => {
+    currentQuote = idx;
+    textEl.textContent   = quotes[idx].text;
+    sourceEl.textContent = quotes[idx].source;
+    textEl.style.opacity   = '1';
+    textEl.style.transform = 'translateY(0)';
+    sourceEl.style.opacity = '1';
+    renderDots();
+  }, 400);
+}
+
+textEl.textContent   = quotes[0].text;
+sourceEl.textContent = quotes[0].source;
+renderDots();
+setInterval(() => goTo((currentQuote + 1) % quotes.length), 5000);
+
+// ─── SCROLL REVEAL ───
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      e.target.classList.add('visible');
+      // stagger siblings
+      const siblings = e.target.parentElement.querySelectorAll('.reveal');
+      siblings.forEach((s, i) => {
+        setTimeout(() => s.classList.add('visible'), i * 120);
+      });
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+</body>
+</html>
