@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>King's Law — Cabinet Juridique · San Andreas</title>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@300;400;500&family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -435,9 +436,10 @@ footer {
     <div class="section-eyebrow">Honoraires</div>
     <h2 class="section-title">Tarification du Cabinet</h2>
   </div>
-  <div class="tarif-grid">
+  <div class="tarif-grid" id="tarif-grid">
 
-    <div class="tarif-card reveal">
+    <!-- Cartes par défaut — remplacées dynamiquement si Supabase connecté -->
+    <div class="tarif-card reveal default-card">
       <div class="tarif-badge">Commis d'office</div>
       <div class="tarif-name">Comparution immédiate</div>
       <div class="tarif-price"><sup>$</sup>15,000</div>
@@ -448,7 +450,7 @@ footer {
       <span class="tarif-tag exo">Gratuit pour le client</span>
     </div>
 
-    <div class="tarif-card featured reveal">
+    <div class="tarif-card featured reveal default-card">
       <div class="tarif-badge">Commis d'office</div>
       <div class="tarif-name">Procès</div>
       <div class="tarif-price"><sup>$</sup>20,000</div>
@@ -459,7 +461,7 @@ footer {
       <span class="tarif-tag exo">Gratuit pour le client</span>
     </div>
 
-    <div class="tarif-card reveal">
+    <div class="tarif-card reveal default-card">
       <div class="tarif-badge">Client privé</div>
       <div class="tarif-name">Mandat direct</div>
       <div class="tarif-price"><sup>$</sup>20,000</div>
@@ -610,7 +612,6 @@ const observer = new IntersectionObserver((entries) => {
   entries.forEach(e => {
     if (e.isIntersecting) {
       e.target.classList.add('visible');
-      // stagger siblings
       const siblings = e.target.parentElement.querySelectorAll('.reveal');
       siblings.forEach((s, i) => {
         setTimeout(() => s.classList.add('visible'), i * 120);
@@ -620,6 +621,88 @@ const observer = new IntersectionObserver((entries) => {
 }, { threshold: 0.1 });
 
 document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ─── SERVICES DYNAMIQUES DEPUIS SUPABASE ───
+const DEFAULT_SERVICES = [
+  {
+    name: "Comparution immédiate",
+    category: "Commis d'office",
+    price: 15000,
+    taxable: false,
+    tag: "Gratuit pour le client",
+    description: "Représentation lors d'une comparution immédiate ou d'un plaider-coupable, lorsque désigné d'office par les forces de l'ordre.",
+    featured: false
+  },
+  {
+    name: "Procès",
+    category: "Commis d'office",
+    price: 20000,
+    taxable: false,
+    tag: "Gratuit pour le client",
+    description: "Représentation complète lors d'une audience contradictoire devant le tribunal, incluant plaidoirie et contre-interrogatoire.",
+    featured: true
+  },
+  {
+    name: "Mandat direct",
+    category: "Client privé",
+    price: 20000,
+    taxable: true,
+    tag: "Taxe 20% incluse",
+    description: "Représentation sur mandat direct du client, toutes procédures confondues. Taxe professionnelle de 20% applicable.",
+    featured: false
+  }
+];
+
+function fmtPrice(n) {
+  return (n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+function renderServiceCard(svc, idx, total) {
+  const isFeatured = svc.featured || (total >= 3 && idx === 1) || (total < 3 && idx === 0);
+  const tagClass   = svc.taxable ? '' : 'exo';
+  const tagText    = svc.tag || (svc.taxable ? 'Taxe 20% incluse' : 'Gratuit pour le client');
+  return `
+    <div class="tarif-card ${isFeatured ? 'featured' : ''} reveal">
+      <div class="tarif-badge">${svc.category || ''}</div>
+      <div class="tarif-name">${svc.name}</div>
+      <div class="tarif-price"><sup>$</sup>${fmtPrice(svc.price)}</div>
+      ${svc.description ? `<div class="tarif-note">${svc.description}</div>` : ''}
+      <span class="tarif-tag ${tagClass}">${tagText}</span>
+    </div>`;
+}
+
+async function loadServices() {
+  const url = localStorage.getItem('sb_url');
+  const key = localStorage.getItem('sb_key');
+  if (!url || !key) return; // Garder les cartes par défaut
+
+  try {
+    const sb = supabase.createClient(url, key);
+    const { data, error } = await sb
+      .from('services')
+      .select('*')
+      .eq('visible', true)
+      .order('created_at', { ascending: true });
+
+    if (error || !data || data.length === 0) return; // Garder les cartes par défaut
+
+    // Remplacer la grille par les services Supabase
+    const grid = document.getElementById('tarif-grid');
+
+    // Toujours afficher les 2 commis par défaut en premier, sauf si Supabase en a déjà
+    const hasCommis = data.some(s => s.category === "Commis d'office");
+    const services  = hasCommis ? data : [...DEFAULT_SERVICES.slice(0, 2), ...data];
+
+    grid.innerHTML = services.map((svc, i) => renderServiceCard(svc, i, services.length)).join('');
+
+    // Ré-observer les nouvelles cartes pour le scroll reveal
+    grid.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  } catch(e) {
+    // Silencieux — les cartes par défaut restent
+  }
+}
+
+loadServices();
 </script>
 </body>
 </html>
