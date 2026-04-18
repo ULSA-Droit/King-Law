@@ -656,7 +656,8 @@ function initGoogleAuth(){
 
 $('g-auth-btn').addEventListener('click',()=>{
   if(!tokenClient){ st('st-week','Client ID Google non configuré.','err'); return; }
-  tokenClient.requestAccessToken({prompt:''});
+  // prompt:'consent' force le re-consentement pour s'assurer d'avoir tous les scopes
+  tokenClient.requestAccessToken({prompt:'consent'});
 });
 
 // Init Google après chargement GSI
@@ -951,8 +952,8 @@ async function createWeeklySheet(sessions, start, end){
     body:JSON.stringify({
       properties:{title,locale:'fr_FR'},
       sheets:[
-        {properties:{title:'Détail',   index:0}},
-        {properties:{title:'Résumé',   index:1}}
+        {properties:{title:'Detail',   index:0}},
+        {properties:{title:'Resume',   index:1}}
       ]
     })
   });
@@ -960,7 +961,6 @@ async function createWeeklySheet(sessions, start, end){
   const sheet    = await createRes.json();
   const sid      = sheet.spreadsheetId;
   const sheetUrl = sheet.spreadsheetUrl;
-  // Récupérer les vrais sheetIds depuis la réponse
   const sheetId0 = sheet.sheets[0].properties.sheetId;
   const sheetId1 = sheet.sheets[1].properties.sheetId;
 
@@ -996,38 +996,42 @@ async function createWeeklySheet(sessions, start, end){
     ['TOTAL SEMAINE','',wBCn,'',wBC,wLSn,'',wLS,wPn,wPB,wTax,wPN,wTot,'']
   ];
 
-  // Écriture données DÉTAIL (une seule fois, nom exact de l'onglet)
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/D%C3%A9tail!A1?valueInputOption=RAW`,{
-    method:'PUT',
-    headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
-    body:JSON.stringify({range:`Détail!A1:N${RT+1}`,values:vals1})
-  });
-
-  // ── DONNÉES ONGLET RÉSUMÉ ──
   const vals2=[
-    ["King's Law — Résumé Hebdomadaire",''],
+    ["King's Law — Resume Hebdomadaire",''],
     [per,''],['',''],
     ['REVENUS','MONTANT ($)'],
     ["Commis d'office BC (Nord)", wBC],
     ["Commis d'office LS (Sud)", wLS],
-    ['Clients privés brut', wPB],['',''],
-    ['DÉDUCTIONS',''],
+    ['Clients prives brut', wPB],['',''],
+    ['DEDUCTIONS',''],
     ['Taxe professionnelle 20%', wTax],['',''],
     ['NET',''],
-    ['Privé net', wPN],
+    ['Prive net', wPN],
     ['TOTAL NET SEMAINE', wTot],['',''],
     ['STATISTIQUES',''],
     ['Sessions', sessions.length],
     ['Dossiers BC', wBCn],['Dossiers LS', wLSn],
-    ['Dossiers privés', wPn],
+    ['Dossiers prives', wPn],
     ['Total dossiers', wBCn+wLSn+wPn],['',''],
-    ['Généré le', now]
+    ['Genere le', now]
   ];
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/R%C3%A9sum%C3%A9!A1?valueInputOption=RAW`,{
-    method:'PUT',
+
+  // ── ÉCRITURE DES DONNÉES (batchUpdate — une seule requête, pas d'encodage URL) ──
+  const writeRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values:batchUpdate`,{
+    method:'POST',
     headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
-    body:JSON.stringify({range:`Résumé!A1:B${vals2.length}`,values:vals2})
+    body:JSON.stringify({
+      valueInputOption:'RAW',
+      data:[
+        {range:`Detail!A1:N${RT+1}`,   values:vals1},
+        {range:`Resume!A1:B${vals2.length}`, values:vals2}
+      ]
+    })
   });
+  if(!writeRes.ok){
+    const e=await writeRes.json();
+    throw new Error('Écriture données : '+JSON.stringify(e.error?.message));
+  }
 
   // ── FORMATAGE ──
   // Helper : repeatCell avec fields='userEnteredFormat' (couvre tout)
