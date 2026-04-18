@@ -178,6 +178,9 @@ textarea.f-input{resize:none;height:56px}
 .hi-note{font-size:10px;color:var(--gold);font-style:italic;margin-top:4px}
 .hi-total{font-family:'Playfair Display',serif;font-size:20px;color:var(--gold-light);text-align:right}
 .hi-total-lbl{font-size:8px;color:var(--muted);text-align:right}
+.hi-right{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.hi-del{width:26px;height:26px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;opacity:.5}
+.hi-del:hover{border-color:var(--red);color:var(--red);opacity:1;background:rgba(224,92,92,.08)}
 .h-empty{text-align:center;padding:50px 20px;color:var(--muted);font-size:10px;letter-spacing:.1em}
 
 /* SERVICES */
@@ -640,7 +643,7 @@ function initGoogleAuth(){
   try{
     tokenClient=google.accounts.oauth2.initTokenClient({
       client_id:gid,
-      scope:'https://www.googleapis.com/auth/spreadsheets',
+      scope:'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',
       callback:resp=>{
         if(resp.error){ setGDot('err','Google — erreur auth'); return; }
         gToken=resp.access_token;
@@ -907,126 +910,421 @@ function buildWeekCap(wd,start,end){
 async function createWeeklySheet(sessions, start, end){
   const title="King's Law : "+fmtDate(start)+" - "+fmtDate(end);
 
-  // 1 — Créer le spreadsheet
-  const createRes=await fetch('https://sheets.googleapis.com/v4/spreadsheets',{
+  // ── COULEURS ──────────────────────────────────────────────────
+  const C = {
+    noir:    {red:0.051,green:0.059,blue:0.078},       // #0D0F14
+    noir2:   {red:0.082,green:0.094,blue:0.118},       // #151820
+    or:      {red:0.788,green:0.659,blue:0.298},       // #C9A84C
+    orClair: {red:0.910,green:0.787,blue:0.478},       // #E8C97A
+    orPale:  {red:0.973,green:0.945,blue:0.878},       // #F8F1E0
+    orDim:   {red:0.973,green:0.945,blue:0.878,alpha:0.3},
+    blanc:   {red:1,green:1,blue:1},
+    gris1:   {red:0.969,green:0.965,blue:0.957},       // #F7F6F4 — lignes paires
+    gris2:   {red:0.937,green:0.929,blue:0.918},       // #EEECE9 — lignes impaires
+    bleu:    {red:0.227,green:0.502,blue:0.847},       // #3A80D8 BC
+    bleuPale:{red:0.878,green:0.929,blue:0.992},       // #E0EDFD
+    or2:     {red:0.788,green:0.659,blue:0.298},       // LS = même gold
+    orPale2: {red:0.992,green:0.965,blue:0.878},       // #FDEFDD
+    vert:    {red:0.212,green:0.698,blue:0.439},       // #36B270 total net
+    vertPale:{red:0.878,green:0.969,blue:0.918},       // #E0F7EB
+    rouge:   {red:0.753,green:0.220,blue:0.220},       // #C03838 taxe
+    rougePale:{red:0.992,green:0.878,blue:0.878},      // #FEE0E0
+    texte:   {red:0.129,green:0.114,blue:0.082},       // #211D15
+    muted:   {red:0.420,green:0.388,blue:0.345},       // #6B6358
+  };
+
+  // ── CALCULS ───────────────────────────────────────────────────
+  const wBC  = sessions.reduce((a,s)=>a+s.bc_total,0);
+  const wLS  = sessions.reduce((a,s)=>a+s.ls_total,0);
+  const wPB  = sessions.reduce((a,s)=>a+s.priv_brut,0);
+  const wTax = sessions.reduce((a,s)=>a+s.priv_tax,0);
+  const wPN  = sessions.reduce((a,s)=>a+s.priv_net,0);
+  const wTot = sessions.reduce((a,s)=>a+s.grand_total,0);
+  const wBCn = sessions.reduce((a,s)=>a+s.bc_count,0);
+  const wLSn = sessions.reduce((a,s)=>a+s.ls_count,0);
+  const wPn  = sessions.reduce((a,s)=>a+s.priv_count,0);
+  const per  = fmtDate(start)+' 21h00 → '+fmtDate(end)+' 21h00';
+
+  // ── CRÉER LE SPREADSHEET (2 onglets) ─────────────────────────
+  const createRes = await fetch('https://sheets.googleapis.com/v4/spreadsheets',{
     method:'POST',
     headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
-    body:JSON.stringify({properties:{title},sheets:[{properties:{title:'Déclaration',sheetId:0}}]})
+    body:JSON.stringify({
+      properties:{title},
+      sheets:[
+        {properties:{title:'📋 Détail',sheetId:0,tabColor:C.or}},
+        {properties:{title:'📊 Résumé',sheetId:1,tabColor:C.vert}}
+      ]
+    })
   });
-  if(!createRes.ok) throw new Error('Création sheet échouée : '+createRes.status);
-  const sheet=await createRes.json();
-  const sid=sheet.spreadsheetId;
-  const sheetUrl=sheet.spreadsheetUrl;
+  if(!createRes.ok) throw new Error('Création échouée : '+createRes.status);
+  const sheet   = await createRes.json();
+  const sid     = sheet.spreadsheetId;
+  const sheetUrl= sheet.spreadsheetUrl;
 
-  // 2 — Préparer les données
-  const headers=['Date','Heure','BC Dos.','BC Type','BC Total ($)','LS Dos.','LS Type','LS Total ($)','Privé Dos.','Privé Brut ($)','Taxe ($)','Privé Net ($)','Total Net ($)','Note'];
+  // ══════════════════════════════════════════════════════════════
+  // ONGLET 1 — DÉTAIL
+  // ══════════════════════════════════════════════════════════════
+  // Structure : 
+  //   R0 : Titre principal (merge A–O)
+  //   R1 : Sous-titre période (merge A–O)
+  //   R2 : vide
+  //   R3 : Sous-titre section COMMIS D'OFFICE BC (merge A–E)  | LS (F–J) | PRIVÉ (K–M) | NET (N–O)
+  //   R4 : Headers (Date | Heure | BC Dos | BC Type | BC Total$ | LS Dos | LS Type | LS Total$ | P Dos | P Brut$ | Taxe$ | P Net$ | Total Net$ | Note)
+  //   R5+ : Données
+  //   Rn-1 : vide
+  //   Rn : TOTAL
 
-  const rows=sessions.map(s=>{
+  const NCOLS = 14; // A à N
+  const headers = ['Date','Heure','Commis BC\nDossiers','BC\nType','BC\nTotal ($)','Commis LS\nDossiers','LS\nType','LS\nTotal ($)','Privé\nDossiers','Privé\nBrut ($)','Taxe\n($)','Privé\nNet ($)','Total Net\n($)','Note'];
+
+  const dataRows = sessions.map(s=>{
     const d=new Date(s.created_at);
     return [
       d.toLocaleDateString('fr-FR'),
       d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}),
-      s.bc_count, s.bc_proces?'Procès':'Comparution', s.bc_total,
-      s.ls_count, s.ls_proces?'Procès':'Comparution', s.ls_total,
-      s.priv_count, s.priv_brut, s.priv_tax, s.priv_net, s.grand_total,
+      s.bc_count||0, s.bc_proces?'Procès':'Comparution', s.bc_total||0,
+      s.ls_count||0, s.ls_proces?'Procès':'Comparution', s.ls_total||0,
+      s.priv_count||0, s.priv_brut||0, s.priv_tax||0, s.priv_net||0, s.grand_total||0,
       s.note||''
     ];
   });
 
-  // Totaux
-  const wBC=sessions.reduce((a,s)=>a+s.bc_total,0);
-  const wLS=sessions.reduce((a,s)=>a+s.ls_total,0);
-  const wPB=sessions.reduce((a,s)=>a+s.priv_brut,0);
-  const wTax=sessions.reduce((a,s)=>a+s.priv_tax,0);
-  const wPN=sessions.reduce((a,s)=>a+s.priv_net,0);
-  const wTot=sessions.reduce((a,s)=>a+s.grand_total,0);
-  const wBCn=sessions.reduce((a,s)=>a+s.bc_count,0);
-  const wLSn=sessions.reduce((a,s)=>a+s.ls_count,0);
-  const wPn=sessions.reduce((a,s)=>a+s.priv_count,0);
-  const totRow=['TOTAL','',wBCn,'',wBC,wLSn,'',wLS,wPn,wPB,wTax,wPN,wTot,''];
+  const totRow = ['TOTAL SEMAINE','',wBCn,'',wBC,wLSn,'',wLS,wPn,wPB,wTax,wPN,wTot,''];
 
-  // 3 — Titre bloc + header + data
-  const values=[
-    ["King's Law — Déclaration hebdomadaire"],
-    ["Période fiscale : "+fmtDate(start)+" 21h00 — "+fmtDate(end)+" 21h00"],
-    ["Généré le "+new Date().toLocaleString('fr-FR')],
-    [],
+  // Indices de lignes (0-based)
+  const R_TITLE  = 0;
+  const R_SUB    = 1;
+  const R_BLANK1 = 2;
+  const R_SEC    = 3;
+  const R_HEAD   = 4;
+  const R_DATA   = 5;
+  const R_LAST_DATA = R_DATA + dataRows.length - 1;
+  const R_BLANK2 = R_LAST_DATA + 1;
+  const R_TOTAL  = R_BLANK2 + 1;
+  const TOTAL_ROWS = R_TOTAL + 1;
+
+  const values1 = [
+    ["King's Law — Déclaration Hebdomadaire",...Array(NCOLS-1).fill('')],
+    [per,...Array(NCOLS-1).fill('')],
+    Array(NCOLS).fill(''),
+    ['◈ COMMIS D\'OFFICE — BLAINE COUNTY (NORD)','','','','','◈ COMMIS D\'OFFICE — LOS SANTOS (SUD)','','','','','◈ CLIENTS PRIVÉS','','',''],
     headers,
-    ...rows,
-    [],
+    ...dataRows,
+    Array(NCOLS).fill(''),
     totRow
   ];
 
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/A1:N${values.length}?valueInputOption=RAW`,{
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/Sheet1!A1:N${TOTAL_ROWS}?valueInputOption=RAW`,{
     method:'PUT',
     headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
-    body:JSON.stringify({values})
+    body:JSON.stringify({range:`Sheet1!A1:N${TOTAL_ROWS}`,values:values1})
   });
 
-  // 4 — Formatage via batchUpdate
-  const numRows=values.length;
-  const titleRow=0, headerRow=4, firstDataRow=5, totRowIdx=numRows-1;
+  // ── Écrire sur Sheet par ID ──
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/A1:N${TOTAL_ROWS}?valueInputOption=RAW`,{
+    method:'PUT',
+    headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
+    body:JSON.stringify({values:values1})
+  });
 
-  const goldRgb={red:0.788,green:0.659,blue:0.298};
-  const darkRgb={red:0.051,green:0.059,blue:0.078};
-  const lightGold={red:0.973,green:0.945,blue:0.878};
-  const lightGray={red:0.95,green:0.95,blue:0.95};
-  const greenRgb={red:0.361,green:0.878,blue:0.627};
+  // ══════════════════════════════════════════════════════════════
+  // ONGLET 2 — RÉSUMÉ
+  // ══════════════════════════════════════════════════════════════
+  const now = new Date().toLocaleString('fr-FR');
+  const values2 = [
+    ["King's Law — Résumé Hebdomadaire",''],
+    [per,''],
+    ['',''],
+    ['REVENUS','MONTANT ($)'],
+    ['Commis d\'office — BC (Nord)', wBC],
+    ['Commis d\'office — LS (Sud)',  wLS],
+    ['Clients privés (brut)',         wPB],
+    ['',''],
+    ['DÉDUCTIONS',''],
+    ['Taxe professionnelle (20%)',    wTax],
+    ['',''],
+    ['NET',''],
+    ['Privé net (après taxe)',        wPN],
+    ['Total net semaine',             wTot],
+    ['',''],
+    ['STATISTIQUES',''],
+    ['Sessions enregistrées',         sessions.length],
+    ['Dossiers BC',                   wBCn],
+    ['Dossiers LS',                   wLSn],
+    ['Dossiers privés',               wPn],
+    ['Total dossiers',                wBCn+wLSn+wPn],
+    ['',''],
+    ['Généré le',                     now],
+  ];
 
-  const requests=[
-    // Merge cellules titre (A1:N1)
-    {mergeCells:{range:{sheetId:0,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:14},mergeType:'MERGE_ALL'}},
-    {mergeCells:{range:{sheetId:0,startRowIndex:1,endRowIndex:2,startColumnIndex:0,endColumnIndex:14},mergeType:'MERGE_ALL'}},
-    {mergeCells:{range:{sheetId:0,startRowIndex:2,endRowIndex:3,startColumnIndex:0,endColumnIndex:14},mergeType:'MERGE_ALL'}},
-    // Style titre
-    {repeatCell:{range:{sheetId:0,startRowIndex:0,endRowIndex:1,startColumnIndex:0,endColumnIndex:14},
-      cell:{userEnteredFormat:{backgroundColor:darkRgb,textFormat:{foregroundColor:goldRgb,fontSize:16,bold:true},horizontalAlignment:'CENTER'}},
-      fields:'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'}},
-    // Style sous-titre
-    {repeatCell:{range:{sheetId:0,startRowIndex:1,endRowIndex:3,startColumnIndex:0,endColumnIndex:14},
-      cell:{userEnteredFormat:{backgroundColor:{red:0.08,green:0.094,blue:0.118},textFormat:{foregroundColor:{red:0.9,green:0.87,blue:0.85},fontSize:10},horizontalAlignment:'CENTER'}},
-      fields:'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'}},
-    // Style headers
-    {repeatCell:{range:{sheetId:0,startRowIndex:headerRow,endRowIndex:headerRow+1,startColumnIndex:0,endColumnIndex:14},
-      cell:{userEnteredFormat:{backgroundColor:goldRgb,textFormat:{foregroundColor:darkRgb,bold:true,fontSize:10},horizontalAlignment:'CENTER'}},
-      fields:'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'}},
-    // Lignes data alternées
-    {repeatCell:{range:{sheetId:0,startRowIndex:firstDataRow,endRowIndex:firstDataRow+rows.length,startColumnIndex:0,endColumnIndex:14},
-      cell:{userEnteredFormat:{backgroundColor:{red:1,green:1,blue:1},textFormat:{fontSize:9},horizontalAlignment:'CENTER'}},
-      fields:'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'}},
+  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}/values/'📊 Résumé'!A1:B${values2.length}?valueInputOption=RAW`,{
+    method:'PUT',
+    headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
+    body:JSON.stringify({values:values2})
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  // FORMATAGE — batchUpdate
+  // ══════════════════════════════════════════════════════════════
+  function cell(bg,fg,bold,size,align,italic,wrap){
+    const fmt={};
+    if(bg) fmt.backgroundColor=bg;
+    fmt.textFormat={};
+    if(fg)   fmt.textFormat.foregroundColor=fg;
+    if(bold) fmt.textFormat.bold=true;
+    if(size) fmt.textFormat.fontSize=size;
+    if(italic) fmt.textFormat.italic=true;
+    if(align) fmt.horizontalAlignment=align;
+    if(wrap)  fmt.wrapStrategy='WRAP';
+    return {userEnteredFormat:fmt};
+  }
+  function fields(hasBg,hasFg,hasBold,hasSize,hasAlign,hasItalic,hasWrap){
+    const f=[];
+    if(hasBg) f.push('userEnteredFormat.backgroundColor');
+    if(hasFg||hasBold||hasSize||hasItalic) f.push('userEnteredFormat.textFormat');
+    if(hasAlign) f.push('userEnteredFormat.horizontalAlignment');
+    if(hasWrap) f.push('userEnteredFormat.wrapStrategy');
+    return f.join(',');
+  }
+  function rng(si,r0,r1,c0,c1){ return {sheetId:si,startRowIndex:r0,endRowIndex:r1,startColumnIndex:c0,endColumnIndex:c1}; }
+  function rep(si,r0,r1,c0,c1,cellFmt,flds){ return {repeatCell:{range:rng(si,r0,r1,c0,c1),cell:cellFmt,fields:flds}}; }
+  function mrg(si,r0,r1,c0,c1){ return {mergeCells:{range:rng(si,r0,r1,c0,c1),mergeType:'MERGE_ALL'}}; }
+  function brd(si,r0,r1,c0,c1,inner,outer){ return {updateBorders:{range:rng(si,r0,r1,c0,c1),innerHorizontal:inner,innerVertical:inner,outerBoundary:outer}}; }
+  function col(si,c0,c1,px){ return {updateDimensionProperties:{range:{sheetId:si,dimension:'COLUMNS',startIndex:c0,endIndex:c1},properties:{pixelSize:px},fields:'pixelSize'}}; }
+  function row(si,r0,r1,px){ return {updateDimensionProperties:{range:{sheetId:si,dimension:'ROWS',startIndex:r0,endIndex:r1},properties:{pixelSize:px},fields:'pixelSize'}}; }
+  function freeze(si,rows){ return {updateSheetProperties:{properties:{sheetId:si,gridProperties:{frozenRowCount:rows}},fields:'gridProperties.frozenRowCount'}}; }
+
+  const solidGold   = {style:'SOLID_MEDIUM',width:2,color:C.or};
+  const solidLight  = {style:'SOLID',width:1,color:{red:0.82,green:0.80,blue:0.76}};
+  const solidMuted  = {style:'SOLID',width:1,color:{red:0.88,green:0.86,blue:0.84}};
+  const solidGoldThin={style:'SOLID',width:1,color:C.or};
+
+  const NR = dataRows.length;
+  const requests = [
+
+    // ── ONGLET DÉTAIL (sheetId=0) ─────────────────────────────
+
+    // Merges
+    mrg(0,R_TITLE,R_TITLE+1,0,NCOLS),
+    mrg(0,R_SUB,R_SUB+1,0,NCOLS),
+    // Section headers merges
+    mrg(0,R_SEC,R_SEC+1,0,5),    // BC section
+    mrg(0,R_SEC,R_SEC+1,5,9),    // LS section
+    mrg(0,R_SEC,R_SEC+1,9,13),   // Privé section
+    mrg(0,R_SEC,R_SEC+1,13,NCOLS), // Note section
+
+    // Titre principal
+    rep(0,R_TITLE,R_TITLE+1,0,NCOLS,
+      cell(C.noir,C.orClair,true,18,'CENTER'),
+      fields(1,1,1,1,1)),
+
+    // Sous-titre période
+    rep(0,R_SUB,R_SUB+1,0,NCOLS,
+      cell(C.noir2,C.or,false,10,'CENTER',true),
+      fields(1,1,0,1,1,1)),
+
+    // Section BC (A-E)
+    rep(0,R_SEC,R_SEC+1,0,5,
+      cell(C.bleu,C.blanc,true,9,'CENTER'),
+      fields(1,1,1,1,1)),
+
+    // Section LS (F-J)
+    rep(0,R_SEC,R_SEC+1,5,9,
+      cell(C.or,C.noir,true,9,'CENTER'),
+      fields(1,1,1,1,1)),
+
+    // Section Privé (K-M)
+    rep(0,R_SEC,R_SEC+1,9,13,
+      cell(C.vert,C.blanc,true,9,'CENTER'),
+      fields(1,1,1,1,1)),
+
+    // Section Note (N)
+    rep(0,R_SEC,R_SEC+1,13,NCOLS,
+      cell(C.gris2,C.muted,true,9,'CENTER'),
+      fields(1,1,1,1,1)),
+
+    // Headers colonnes
+    rep(0,R_HEAD,R_HEAD+1,0,NCOLS,
+      cell(C.noir,C.orClair,true,9,'CENTER',false,true),
+      fields(1,1,1,1,1,0,1)),
+
+    // Coloration headers par groupe
+    rep(0,R_HEAD,R_HEAD+1,0,5,
+      cell(C.bleuPale,C.bleu,true,9,'CENTER',false,true),
+      fields(1,1,1,1,1,0,1)),
+    rep(0,R_HEAD,R_HEAD+1,5,9,
+      cell(C.orPale2,C.or,true,9,'CENTER',false,true),
+      fields(1,1,1,1,1,0,1)),
+    rep(0,R_HEAD,R_HEAD+1,9,13,
+      cell(C.vertPale,C.vert,true,9,'CENTER',false,true),
+      fields(1,1,1,1,1,0,1)),
+    rep(0,R_HEAD,R_HEAD+1,13,NCOLS,
+      cell(C.gris1,C.muted,true,9,'CENTER',false,true),
+      fields(1,1,1,1,1,0,1)),
+
+    // Lignes data — alternance
+    ...(NR>0?[
+      // Paires : fond gris1
+      rep(0,R_DATA,R_DATA+NR,0,NCOLS,
+        cell(C.gris1,C.texte,false,9,'CENTER'),
+        fields(1,1,0,1,1)),
+    ]:[]),
+
+    // Colonnes montants colorées dans data
+    ...(NR>0?[
+      // BC Total — bleu
+      rep(0,R_DATA,R_DATA+NR,4,5,
+        cell(C.bleuPale,C.bleu,true,9,'CENTER'),
+        fields(1,1,1,1,1)),
+      // LS Total — gold
+      rep(0,R_DATA,R_DATA+NR,7,8,
+        cell(C.orPale2,C.or,true,9,'CENTER'),
+        fields(1,1,1,1,1)),
+      // Taxe — rouge
+      rep(0,R_DATA,R_DATA+NR,10,11,
+        cell(C.rougePale,C.rouge,true,9,'CENTER'),
+        fields(1,1,1,1,1)),
+      // Privé Net — vert
+      rep(0,R_DATA,R_DATA+NR,11,12,
+        cell(C.vertPale,C.vert,true,9,'CENTER'),
+        fields(1,1,1,1,1)),
+      // Total Net — vert fort
+      rep(0,R_DATA,R_DATA+NR,12,13,
+        cell(C.vert,C.blanc,true,10,'CENTER'),
+        fields(1,1,1,1,1)),
+      // Date — texte normal
+      rep(0,R_DATA,R_DATA+NR,0,2,
+        cell(C.blanc,C.texte,false,9,'CENTER'),
+        fields(1,1,0,1,1)),
+    ]:[]),
+
     // Ligne TOTAL
-    {repeatCell:{range:{sheetId:0,startRowIndex:totRowIdx,endRowIndex:totRowIdx+1,startColumnIndex:0,endColumnIndex:14},
-      cell:{userEnteredFormat:{backgroundColor:lightGold,textFormat:{foregroundColor:darkRgb,bold:true,fontSize:10},horizontalAlignment:'CENTER'}},
-      fields:'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)'}},
-    // Colonnes montants en vert (BC Total, LS Total, Total Net)
-    {repeatCell:{range:{sheetId:0,startRowIndex:firstDataRow,endRowIndex:firstDataRow+rows.length,startColumnIndex:4,endColumnIndex:5},
-      cell:{userEnteredFormat:{textFormat:{foregroundColor:{red:0.2,green:0.6,blue:0.9},bold:true}}},
-      fields:'userEnteredFormat.textFormat'}},
-    {repeatCell:{range:{sheetId:0,startRowIndex:firstDataRow,endRowIndex:firstDataRow+rows.length,startColumnIndex:7,endColumnIndex:8},
-      cell:{userEnteredFormat:{textFormat:{foregroundColor:{red:0.788,green:0.659,blue:0.298},bold:true}}},
-      fields:'userEnteredFormat.textFormat'}},
-    {repeatCell:{range:{sheetId:0,startRowIndex:firstDataRow,endRowIndex:firstDataRow+rows.length,startColumnIndex:12,endColumnIndex:13},
-      cell:{userEnteredFormat:{textFormat:{foregroundColor:greenRgb,bold:true}}},
-      fields:'userEnteredFormat.textFormat'}},
-    // Largeurs colonnes
-    {updateDimensionProperties:{range:{sheetId:0,dimension:'COLUMNS',startIndex:0,endIndex:1},properties:{pixelSize:100},fields:'pixelSize'}},
-    {updateDimensionProperties:{range:{sheetId:0,dimension:'COLUMNS',startIndex:1,endIndex:2},properties:{pixelSize:70},fields:'pixelSize'}},
-    {updateDimensionProperties:{range:{sheetId:0,dimension:'COLUMNS',startIndex:2,endIndex:14},properties:{pixelSize:90},fields:'pixelSize'}},
-    // Hauteur row titre
-    {updateDimensionProperties:{range:{sheetId:0,dimension:'ROWS',startIndex:0,endIndex:1},properties:{pixelSize:50},fields:'pixelSize'}},
-    // Freeze header row
-    {updateSheetProperties:{properties:{sheetId:0,gridProperties:{frozenRowCount:headerRow+1}},fields:'gridProperties.frozenRowCount'}},
-    // Bordures
-    {updateBorders:{range:{sheetId:0,startRowIndex:headerRow,endRowIndex:totRowIdx+1,startColumnIndex:0,endColumnIndex:14},
-      innerHorizontal:{style:'SOLID',width:1,color:{red:0.85,green:0.82,blue:0.78}},
-      innerVertical:{style:'SOLID',width:1,color:{red:0.85,green:0.82,blue:0.78}},
-      outerBoundary:{style:'SOLID_MEDIUM',width:2,color:goldRgb}}}
+    rep(0,R_TOTAL,R_TOTAL+1,0,NCOLS,
+      cell(C.noir,C.orClair,true,10,'CENTER'),
+      fields(1,1,1,1,1)),
+    rep(0,R_TOTAL,R_TOTAL+1,4,5,
+      cell(C.bleu,C.blanc,true,10,'CENTER'),
+      fields(1,1,1,1,1)),
+    rep(0,R_TOTAL,R_TOTAL+1,7,8,
+      cell(C.or,C.noir,true,10,'CENTER'),
+      fields(1,1,1,1,1)),
+    rep(0,R_TOTAL,R_TOTAL+1,10,11,
+      cell(C.rouge,C.blanc,true,10,'CENTER'),
+      fields(1,1,1,1,1)),
+    rep(0,R_TOTAL,R_TOTAL+1,11,12,
+      cell(C.vert,C.blanc,true,10,'CENTER'),
+      fields(1,1,1,1,1)),
+    rep(0,R_TOTAL,R_TOTAL+1,12,13,
+      cell(C.vert,C.blanc,true,12,'CENTER'),
+      fields(1,1,1,1,1)),
+
+    // Bordures tableau principal
+    brd(0,R_HEAD,R_TOTAL+1,0,NCOLS,solidMuted,solidGold),
+    // Séparateurs de groupes (verticaux accentués)
+    brd(0,R_HEAD,R_TOTAL+1,0,5,solidMuted,solidGold),
+    brd(0,R_HEAD,R_TOTAL+1,5,9,solidMuted,solidGoldThin),
+    brd(0,R_HEAD,R_TOTAL+1,9,13,solidMuted,solidGoldThin),
+
+    // Largeurs colonnes (0-based)
+    col(0,0,1,100),   // Date
+    col(0,1,2,65),    // Heure
+    col(0,2,3,60),    // BC Dos
+    col(0,3,4,80),    // BC Type
+    col(0,4,5,90),    // BC Total
+    col(0,5,6,60),    // LS Dos
+    col(0,6,7,80),    // LS Type
+    col(0,7,8,90),    // LS Total
+    col(0,8,9,60),    // P Dos
+    col(0,9,10,90),   // P Brut
+    col(0,10,11,80),  // Taxe
+    col(0,11,12,90),  // P Net
+    col(0,12,13,100), // Total Net
+    col(0,13,14,200), // Note
+
+    // Hauteurs lignes
+    row(0,R_TITLE,R_TITLE+1,56),
+    row(0,R_SUB,R_SUB+1,32),
+    row(0,R_SEC,R_SEC+1,36),
+    row(0,R_HEAD,R_HEAD+1,48),
+    row(0,R_TOTAL,R_TOTAL+1,38),
+
+    // Freeze jusqu'aux headers
+    freeze(0,R_HEAD+1),
+
+    // ── ONGLET RÉSUMÉ (sheetId=1) ────────────────────────────
+
+    mrg(1,0,1,0,2),
+    mrg(1,1,2,0,2),
+
+    rep(1,0,1,0,2,
+      cell(C.noir,C.orClair,true,16,'CENTER'),
+      fields(1,1,1,1,1)),
+    rep(1,1,2,0,2,
+      cell(C.noir2,C.or,false,10,'CENTER',true),
+      fields(1,1,0,1,1,1)),
+
+    // Labels section
+    rep(1,3,4,0,2,
+      cell(C.or,C.noir,true,10,'CENTER'),
+      fields(1,1,1,1,1)),
+    rep(1,8,9,0,2,
+      cell(C.rouge,C.blanc,true,10,'CENTER'),
+      fields(1,1,1,1,1)),
+    rep(1,11,12,0,2,
+      cell(C.vert,C.blanc,true,10,'CENTER'),
+      fields(1,1,1,1,1)),
+    rep(1,15,16,0,2,
+      cell(C.noir2,C.or,true,10,'CENTER'),
+      fields(1,1,1,1,1)),
+
+    // Revenus BC, LS, Brut
+    rep(1,4,5,0,1,cell(C.bleuPale,C.bleu,false,10),fields(1,1,0,1)),
+    rep(1,4,5,1,2,cell(C.bleuPale,C.bleu,true,11,'RIGHT'),fields(1,1,1,1,1)),
+    rep(1,5,6,0,1,cell(C.orPale2,C.or,false,10),fields(1,1,0,1)),
+    rep(1,5,6,1,2,cell(C.orPale2,C.or,true,11,'RIGHT'),fields(1,1,1,1,1)),
+    rep(1,6,7,0,2,cell(C.gris1,C.texte,false,10),fields(1,1,0,1)),
+    rep(1,6,7,1,2,cell(C.gris1,C.texte,false,10,'RIGHT'),fields(1,1,0,1,1)),
+
+    // Taxe
+    rep(1,9,10,0,1,cell(C.rougePale,C.rouge,false,10),fields(1,1,0,1)),
+    rep(1,9,10,1,2,cell(C.rougePale,C.rouge,true,12,'RIGHT'),fields(1,1,1,1,1)),
+
+    // Nets
+    rep(1,12,13,0,2,cell(C.vertPale,C.vert,false,10),fields(1,1,0,1)),
+    rep(1,12,13,1,2,cell(C.vertPale,C.vert,false,10,'RIGHT'),fields(1,1,0,1,1)),
+    rep(1,13,14,0,2,cell(C.vert,C.blanc,true,14,'CENTER'),fields(1,1,1,1,1)),
+
+    // Stats
+    rep(1,16,22,0,2,cell(C.gris1,C.texte,false,10),fields(1,1,0,1)),
+    rep(1,16,22,1,2,cell(C.gris1,C.texte,false,10,'RIGHT'),fields(1,1,0,1,1)),
+    rep(1,20,21,0,2,cell(C.orPale,C.texte,true,10),fields(1,1,1,1)),
+
+    // Largeurs
+    col(1,0,1,280),
+    col(1,1,2,160),
+
+    // Hauteurs
+    row(1,0,1,52),
+    row(1,1,2,30),
+    row(1,3,4,34),
+    row(1,8,9,34),
+    row(1,11,12,34),
+    row(1,13,14,44),
+    row(1,15,16,34),
   ];
 
   await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`,{
     method:'POST',
     headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
     body:JSON.stringify({requests})
+  });
+
+  // ── PARTAGE PUBLIC EN LECTURE ─────────────────────────────
+  await fetch(`https://www.googleapis.com/drive/v3/files/${sid}/permissions`,{
+    method:'POST',
+    headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
+    body:JSON.stringify({role:'reader',type:'anyone'})
   });
 
   return sheetUrl;
@@ -1060,11 +1358,24 @@ function renderHistory(){
         </div>
         ${s.note?'<div class="hi-note">« '+s.note+' »</div>':''}
       </div>
-      <div>
-        <div class="hi-total-lbl">Net</div>
-        <div class="hi-total">${fmt(s.grand_total)}</div>
+      <div class="hi-right">
+        <button class="hi-del" data-id="${s.id}" title="Supprimer cette session">✕</button>
+        <div>
+          <div class="hi-total-lbl">Net</div>
+          <div class="hi-total">${fmt(s.grand_total)}</div>
+        </div>
       </div>
     </div>`).join('');
+
+  list.querySelectorAll('.hi-del').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      if(!confirm('Supprimer cette session ? Action irréversible.')) return;
+      const id=btn.dataset.id;
+      const {error}=await sb.from('sessions').delete().eq('id',id);
+      if(error){ st('st-week','Erreur suppression.','err'); return; }
+      await loadHistory();
+    });
+  });
 }
 
 // ── SERVICES ───────────────────────────────
