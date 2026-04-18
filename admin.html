@@ -1033,145 +1033,170 @@ async function createWeeklySheet(sessions, start, end){
     throw new Error('Écriture données : '+JSON.stringify(e.error?.message));
   }
 
-  // ── FORMATAGE ──
-  // Helper : repeatCell avec fields='userEnteredFormat' (couvre tout)
-  const F='userEnteredFormat';
-  function rep(si,r0,r1,c0,c1,bg,fgc,bold,size,align,italic,wrap){
+  // ── FORMATAGE — 3 passes séparées pour isoler les erreurs ──
+  function rng(si,r0,r1,c0,c1){ return {sheetId:si,startRowIndex:r0,endRowIndex:r1,startColumnIndex:c0,endColumnIndex:c1}; }
+  function mrg(si,r0,r1,c0,c1){ return {mergeCells:{range:rng(si,r0,r1,c0,c1),mergeType:'MERGE_ALL'}}; }
+  function dimC(si,c0,c1,px){return {updateDimensionProperties:{range:{sheetId:si,dimension:'COLUMNS',startIndex:c0,endIndex:c1},properties:{pixelSize:px},fields:'pixelSize'}};}
+  function dimR(si,r0,r1,px){return {updateDimensionProperties:{range:{sheetId:si,dimension:'ROWS',startIndex:r0,endIndex:r1},properties:{pixelSize:px},fields:'pixelSize'}};}
+  function frz(si,n){return {updateSheetProperties:{properties:{sheetId:si,gridProperties:{frozenRowCount:n}},fields:'gridProperties.frozenRowCount'}};}
+
+  // repeatCell avec fields construits dynamiquement selon ce qui est réellement défini
+  function rep(si,r0,r1,c0,c1,opts){
     const fmt={};
-    if(bg)    fmt.backgroundColor=bg;
-    const tf={};
-    if(fgc)   tf.foregroundColor=fgc;
-    if(bold)  tf.bold=true;
-    if(size)  tf.fontSize=size;
-    if(italic)tf.italic=true;
-    if(Object.keys(tf).length) fmt.textFormat=tf;
-    if(align) fmt.horizontalAlignment=align;
-    if(wrap)  fmt.wrapStrategy='WRAP';
-    return {repeatCell:{range:{sheetId:si,startRowIndex:r0,endRowIndex:r1,startColumnIndex:c0,endColumnIndex:c1},cell:{userEnteredFormat:fmt},fields:F}};
+    const fields=[];
+    if(opts.bg!==undefined){fmt.backgroundColor=opts.bg;fields.push('userEnteredFormat.backgroundColor');}
+    if(opts.fg!==undefined||opts.bold!==undefined||opts.size!==undefined||opts.italic){
+      const tf={};
+      if(opts.fg)    tf.foregroundColor=opts.fg;
+      if(opts.bold)  tf.bold=true;
+      if(opts.size)  tf.fontSize=opts.size;
+      if(opts.italic)tf.italic=true;
+      fmt.textFormat=tf;
+      fields.push('userEnteredFormat.textFormat');
+    }
+    if(opts.align){fmt.horizontalAlignment=opts.align;fields.push('userEnteredFormat.horizontalAlignment');}
+    if(opts.wrap) {fmt.wrapStrategy='WRAP';fields.push('userEnteredFormat.wrapStrategy');}
+    return {repeatCell:{range:rng(si,r0,r1,c0,c1),cell:{userEnteredFormat:fmt},fields:fields.join(',')}};
   }
-  const mrg=(si,r0,r1,c0,c1)=>({mergeCells:{range:{sheetId:si,startRowIndex:r0,endRowIndex:r1,startColumnIndex:c0,endColumnIndex:c1},mergeType:'MERGE_ALL'}});
-  const dimC=(si,c0,c1,px)=>({updateDimensionProperties:{range:{sheetId:si,dimension:'COLUMNS',startIndex:c0,endIndex:c1},properties:{pixelSize:px},fields:'pixelSize'}});
-  const dimR=(si,r0,r1,px)=>({updateDimensionProperties:{range:{sheetId:si,dimension:'ROWS',startIndex:r0,endIndex:r1},properties:{pixelSize:px},fields:'pixelSize'}});
-  const frz=(si,n)=>({updateSheetProperties:{properties:{sheetId:si,gridProperties:{frozenRowCount:n}},fields:'gridProperties.frozenRowCount'}});
-  const brd=(si,r0,r1,c0,c1)=>({updateBorders:{range:{sheetId:si,startRowIndex:r0,endRowIndex:r1,startColumnIndex:c0,endColumnIndex:c1},
-    innerHorizontal:{style:'SOLID',width:1,color:{red:.84,green:.82,blue:.78}},
-    innerVertical:  {style:'SOLID',width:1,color:{red:.84,green:.82,blue:.78}},
-    outerBoundary:  {style:'SOLID_MEDIUM',width:2,color:C.or}}});
 
-  const requests=[
-    // ── Merges onglet DÉTAIL ──
-    mrg(sheetId0,R0,R0+1,0,NC),   // Titre
-    mrg(sheetId0,R1,R1+1,0,NC),   // Période
-    mrg(sheetId0,R3,R3+1,0,5),    // Section BC
-    mrg(sheetId0,R3,R3+1,5,9),    // Section LS
-    mrg(sheetId0,R3,R3+1,9,13),   // Section Privé
-    mrg(sheetId0,R3,R3+1,13,NC),  // Section Note
+  async function batch(reqs, label){
+    const r=await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`,{
+      method:'POST',
+      headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
+      body:JSON.stringify({requests:reqs})
+    });
+    if(!r.ok){
+      const e=await r.json();
+      throw new Error(label+' : '+(e.error?.message||r.status));
+    }
+  }
 
-    // Titre
-    rep(sheetId0,R0,R0+1,0,NC, C.noir,C.orClair,true,16,'CENTER'),
-    // Période
-    rep(sheetId0,R1,R1+1,0,NC, C.noir2,C.or,false,10,'CENTER',true),
-    // Sections headers
-    rep(sheetId0,R3,R3+1,0,5,  C.bleu,C.blanc,true,9,'CENTER'),
-    rep(sheetId0,R3,R3+1,5,9,  C.or,C.noir,true,9,'CENTER'),
-    rep(sheetId0,R3,R3+1,9,13, C.vert,C.blanc,true,9,'CENTER'),
-    rep(sheetId0,R3,R3+1,13,NC,C.gris2,C.muted,true,9,'CENTER'),
-    // Headers colonnes par groupe couleur
-    rep(sheetId0,R4,R4+1,0,5,  C.bleuPale,C.bleu,true,9,'CENTER',false,true),
-    rep(sheetId0,R4,R4+1,5,9,  C.orPale2, C.or,  true,9,'CENTER',false,true),
-    rep(sheetId0,R4,R4+1,9,13, C.vertPale,C.vert,true,9,'CENTER',false,true),
-    rep(sheetId0,R4,R4+1,13,NC,C.gris1,  C.muted,true,9,'CENTER',false,true),
+  const S0=sheetId0, S1=sheetId1;
 
-    // Data rows — base gris clair
-    ...(NR>0?[rep(sheetId0,R5,R5+NR,0,NC,C.gris1,C.texte,false,9,'CENTER')]:[]),
-    // Colonnes montants dans data
+  // PASS 1 — Merges + dimensions + freeze
+  st('st-week','Formatage (1/3)...','loading');
+  await batch([
+    mrg(S0,R0,R0+1,0,NC), mrg(S0,R1,R1+1,0,NC),
+    mrg(S0,R3,R3+1,0,5),  mrg(S0,R3,R3+1,5,9),
+    mrg(S0,R3,R3+1,9,13), mrg(S0,R3,R3+1,13,NC),
+    mrg(S1,0,1,0,2), mrg(S1,1,2,0,2),
+    dimC(S0,0,1,100),dimC(S0,1,2,60),dimC(S0,2,3,65),dimC(S0,3,4,95),dimC(S0,4,5,95),
+    dimC(S0,5,6,65),dimC(S0,6,7,95),dimC(S0,7,8,95),dimC(S0,8,9,60),
+    dimC(S0,9,10,95),dimC(S0,10,11,80),dimC(S0,11,12,95),dimC(S0,12,13,105),dimC(S0,13,14,180),
+    dimR(S0,R0,R0+1,52),dimR(S0,R1,R1+1,26),dimR(S0,R3,R3+1,32),dimR(S0,R4,R4+1,46),dimR(S0,RT,RT+1,38),
+    dimC(S1,0,1,260),dimC(S1,1,2,150),
+    dimR(S1,0,1,50),dimR(S1,1,2,28),dimR(S1,3,4,32),dimR(S1,8,9,32),dimR(S1,11,12,32),dimR(S1,13,14,44),dimR(S1,15,16,32),
+    frz(S0,R4+1),
+  ],'Pass 1 merges/dims');
+
+  // PASS 2 — Couleurs de fond (backgrounds only, fields ciblé)
+  st('st-week','Formatage (2/3)...','loading');
+  await batch([
+    // DÉTAIL — Titres
+    rep(S0,R0,R0+1,0,NC,{bg:C.noir}),
+    rep(S0,R1,R1+1,0,NC,{bg:C.noir2}),
+    // Sections
+    rep(S0,R3,R3+1,0,5, {bg:C.bleu}),
+    rep(S0,R3,R3+1,5,9, {bg:C.or}),
+    rep(S0,R3,R3+1,9,13,{bg:C.vert}),
+    rep(S0,R3,R3+1,13,NC,{bg:C.gris2}),
+    // Headers par groupe
+    rep(S0,R4,R4+1,0,5, {bg:C.bleuPale}),
+    rep(S0,R4,R4+1,5,9, {bg:C.orPale2}),
+    rep(S0,R4,R4+1,9,13,{bg:C.vertPale}),
+    rep(S0,R4,R4+1,13,NC,{bg:C.gris1}),
+    // Data
     ...(NR>0?[
-      rep(sheetId0,R5,R5+NR,0,2,  C.blanc,C.texte,false,9,'CENTER'),  // Date/heure blanc
-      rep(sheetId0,R5,R5+NR,4,5,  C.bleuPale,C.bleu,true,9,'CENTER'), // BC Total
-      rep(sheetId0,R5,R5+NR,7,8,  C.orPale2, C.or,  true,9,'CENTER'), // LS Total
-      rep(sheetId0,R5,R5+NR,10,11,C.rougePale,C.rouge,true,9,'CENTER'),// Taxe
-      rep(sheetId0,R5,R5+NR,11,12,C.vertPale, C.vert,true,9,'CENTER'),// Privé Net
-      rep(sheetId0,R5,R5+NR,12,13,C.vert,     C.blanc,true,10,'CENTER'),// Total Net
+      rep(S0,R5,R5+NR,0,NC,{bg:C.gris1}),
+      rep(S0,R5,R5+NR,0,2, {bg:C.blanc}),
+      rep(S0,R5,R5+NR,4,5, {bg:C.bleuPale}),
+      rep(S0,R5,R5+NR,7,8, {bg:C.orPale2}),
+      rep(S0,R5,R5+NR,10,11,{bg:C.rougePale}),
+      rep(S0,R5,R5+NR,11,12,{bg:C.vertPale}),
+      rep(S0,R5,R5+NR,12,13,{bg:C.vert}),
     ]:[]),
+    // TOTAL
+    rep(S0,RT,RT+1,0,NC,{bg:C.noir}),
+    rep(S0,RT,RT+1,4,5, {bg:C.bleu}),
+    rep(S0,RT,RT+1,7,8, {bg:C.or}),
+    rep(S0,RT,RT+1,10,11,{bg:C.rouge}),
+    rep(S0,RT,RT+1,11,12,{bg:C.vert}),
+    rep(S0,RT,RT+1,12,13,{bg:C.vert}),
+    // RÉSUMÉ
+    rep(S1,0,1,0,2,{bg:C.noir}),rep(S1,1,2,0,2,{bg:C.noir2}),
+    rep(S1,3,4,0,2,{bg:C.or}),rep(S1,8,9,0,2,{bg:C.rouge}),
+    rep(S1,11,12,0,2,{bg:C.vert}),rep(S1,13,14,0,2,{bg:C.vert}),
+    rep(S1,15,16,0,2,{bg:C.noir2}),
+    rep(S1,4,5,0,2,{bg:C.bleuPale}),rep(S1,5,6,0,2,{bg:C.orPale2}),
+    rep(S1,6,7,0,2,{bg:C.gris1}),rep(S1,9,10,0,2,{bg:C.rougePale}),
+    rep(S1,12,13,0,2,{bg:C.vertPale}),rep(S1,16,22,0,2,{bg:C.gris1}),
+  ],'Pass 2 backgrounds');
 
-    // Ligne TOTAL
-    rep(sheetId0,RT,RT+1,0,NC, C.noir,C.orClair,true,10,'CENTER'),
-    rep(sheetId0,RT,RT+1,4,5,  C.bleu, C.blanc,true,10,'CENTER'),
-    rep(sheetId0,RT,RT+1,7,8,  C.or,   C.noir, true,10,'CENTER'),
-    rep(sheetId0,RT,RT+1,10,11,C.rouge,C.blanc,true,10,'CENTER'),
-    rep(sheetId0,RT,RT+1,11,12,C.vert, C.blanc,true,10,'CENTER'),
-    rep(sheetId0,RT,RT+1,12,13,C.vert, C.blanc,true,12,'CENTER'),
-
+  // PASS 3 — Texte + alignement + bordures
+  st('st-week','Formatage (3/3)...','loading');
+  await batch([
+    // DÉTAIL Titres texte
+    rep(S0,R0,R0+1,0,NC,{fg:C.orClair,bold:true,size:16,align:'CENTER'}),
+    rep(S0,R1,R1+1,0,NC,{fg:C.or,size:10,align:'CENTER',italic:true}),
+    // Sections texte
+    rep(S0,R3,R3+1,0,5, {fg:C.blanc,bold:true,size:9,align:'CENTER'}),
+    rep(S0,R3,R3+1,5,9, {fg:C.noir,bold:true,size:9,align:'CENTER'}),
+    rep(S0,R3,R3+1,9,13,{fg:C.blanc,bold:true,size:9,align:'CENTER'}),
+    rep(S0,R3,R3+1,13,NC,{fg:C.muted,bold:true,size:9,align:'CENTER'}),
+    // Headers texte
+    rep(S0,R4,R4+1,0,5, {fg:C.bleu,bold:true,size:9,align:'CENTER',wrap:true}),
+    rep(S0,R4,R4+1,5,9, {fg:C.or,  bold:true,size:9,align:'CENTER',wrap:true}),
+    rep(S0,R4,R4+1,9,13,{fg:C.vert,bold:true,size:9,align:'CENTER',wrap:true}),
+    rep(S0,R4,R4+1,13,NC,{fg:C.muted,bold:true,size:9,align:'CENTER',wrap:true}),
+    // Data texte
+    ...(NR>0?[
+      rep(S0,R5,R5+NR,0,NC,{fg:C.texte,size:9,align:'CENTER'}),
+      rep(S0,R5,R5+NR,4,5, {fg:C.bleu,bold:true,size:9,align:'CENTER'}),
+      rep(S0,R5,R5+NR,7,8, {fg:C.or,  bold:true,size:9,align:'CENTER'}),
+      rep(S0,R5,R5+NR,10,11,{fg:C.rouge,bold:true,size:9,align:'CENTER'}),
+      rep(S0,R5,R5+NR,11,12,{fg:C.vert,bold:true,size:9,align:'CENTER'}),
+      rep(S0,R5,R5+NR,12,13,{fg:C.blanc,bold:true,size:10,align:'CENTER'}),
+    ]:[]),
+    // TOTAL texte
+    rep(S0,RT,RT+1,0,NC, {fg:C.orClair,bold:true,size:10,align:'CENTER'}),
+    rep(S0,RT,RT+1,4,5,  {fg:C.blanc,bold:true,size:10,align:'CENTER'}),
+    rep(S0,RT,RT+1,7,8,  {fg:C.noir, bold:true,size:10,align:'CENTER'}),
+    rep(S0,RT,RT+1,10,11,{fg:C.blanc,bold:true,size:10,align:'CENTER'}),
+    rep(S0,RT,RT+1,11,12,{fg:C.blanc,bold:true,size:10,align:'CENTER'}),
+    rep(S0,RT,RT+1,12,13,{fg:C.blanc,bold:true,size:12,align:'CENTER'}),
     // Bordures
-    brd(sheetId0,R4,RT+1,0,NC),
-
-    // Dimensions colonnes
-    dimC(sheetId0,0,1,100), dimC(sheetId0,1,2,60),
-    dimC(sheetId0,2,3,60),  dimC(sheetId0,3,4,90),
-    dimC(sheetId0,4,5,90),  dimC(sheetId0,5,6,60),
-    dimC(sheetId0,6,7,90),  dimC(sheetId0,7,8,90),
-    dimC(sheetId0,8,9,60),  dimC(sheetId0,9,10,90),
-    dimC(sheetId0,10,11,80),dimC(sheetId0,11,12,90),
-    dimC(sheetId0,12,13,100),dimC(sheetId0,13,14,180),
-    // Hauteurs lignes
-    dimR(sheetId0,R0,R0+1,52), dimR(sheetId0,R1,R1+1,28),
-    dimR(sheetId0,R3,R3+1,32), dimR(sheetId0,R4,R4+1,44),
-    dimR(sheetId0,RT,RT+1,36),
-    // Freeze
-    frz(sheetId0,R4+1),
-
-    // ── ONGLET RÉSUMÉ ──
-    mrg(sheetId1,0,1,0,2), mrg(sheetId1,1,2,0,2),
-    // Titre résumé
-    rep(sheetId1,0,1,0,2, C.noir,C.orClair,true,15,'CENTER'),
-    rep(sheetId1,1,2,0,2, C.noir2,C.or,false,10,'CENTER',true),
-    // Section REVENUS
-    rep(sheetId1,3,4,0,2, C.or,C.noir,true,10,'CENTER'),
-    rep(sheetId1,4,5,0,1, C.bleuPale,C.bleu,false,10),
-    rep(sheetId1,4,5,1,2, C.bleuPale,C.bleu,true,11,'RIGHT'),
-    rep(sheetId1,5,6,0,1, C.orPale2,C.or,false,10),
-    rep(sheetId1,5,6,1,2, C.orPale2,C.or,true,11,'RIGHT'),
-    rep(sheetId1,6,7,0,2, C.gris1,C.texte,false,10),
-    rep(sheetId1,6,7,1,2, C.gris1,C.texte,false,10,'RIGHT'),
-    // Section DÉDUCTIONS
-    rep(sheetId1,8,9,0,2,  C.rouge,C.blanc,true,10,'CENTER'),
-    rep(sheetId1,9,10,0,1, C.rougePale,C.rouge,false,10),
-    rep(sheetId1,9,10,1,2, C.rougePale,C.rouge,true,12,'RIGHT'),
-    // Section NET
-    rep(sheetId1,11,12,0,2, C.vert,C.blanc,true,10,'CENTER'),
-    rep(sheetId1,12,13,0,2, C.vertPale,C.vert,false,10),
-    rep(sheetId1,12,13,1,2, C.vertPale,C.vert,false,10,'RIGHT'),
-    rep(sheetId1,13,14,0,2, C.vert,C.blanc,true,14,'CENTER'),
-    // Section STATS
-    rep(sheetId1,15,16,0,2, C.noir2,C.or,true,10,'CENTER'),
-    rep(sheetId1,16,22,0,2, C.gris1,C.texte,false,10),
-    rep(sheetId1,16,22,1,2, C.gris1,C.texte,false,10,'RIGHT'),
-    rep(sheetId1,20,21,0,2, C.orPale,C.texte,true,10),
-    rep(sheetId1,22,23,0,2, C.noir2,C.muted,false,9,'CENTER',true),
-    // Dimensions résumé
-    dimC(sheetId1,0,1,260), dimC(sheetId1,1,2,150),
-    dimR(sheetId1,0,1,50),  dimR(sheetId1,1,2,28),
-    dimR(sheetId1,3,4,32),  dimR(sheetId1,8,9,32),
-    dimR(sheetId1,11,12,32),dimR(sheetId1,13,14,42),
-    dimR(sheetId1,15,16,32),
-  ];
-
-  const batchRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sid}:batchUpdate`,{
-    method:'POST',
-    headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
-    body:JSON.stringify({requests})
-  });
-  if(!batchRes.ok){
-    const err=await batchRes.json();
-    console.error('batchUpdate error',err);
-  }
+    {updateBorders:{range:rng(S0,R4,RT+1,0,NC),
+      innerHorizontal:{style:'SOLID',width:1,color:{red:.84,green:.82,blue:.78}},
+      innerVertical:  {style:'SOLID',width:1,color:{red:.84,green:.82,blue:.78}},
+      outerBoundary:  {style:'SOLID_MEDIUM',width:2,color:C.or}}},
+    // RÉSUMÉ texte
+    rep(S1,0,1,0,2,{fg:C.orClair,bold:true,size:15,align:'CENTER'}),
+    rep(S1,1,2,0,2,{fg:C.or,size:10,align:'CENTER',italic:true}),
+    rep(S1,3,4,0,2,{fg:C.noir,bold:true,size:10,align:'CENTER'}),
+    rep(S1,8,9,0,2,{fg:C.blanc,bold:true,size:10,align:'CENTER'}),
+    rep(S1,11,12,0,2,{fg:C.blanc,bold:true,size:10,align:'CENTER'}),
+    rep(S1,13,14,0,2,{fg:C.blanc,bold:true,size:14,align:'CENTER'}),
+    rep(S1,15,16,0,2,{fg:C.or,bold:true,size:10,align:'CENTER'}),
+    rep(S1,4,7,1,2,{align:'RIGHT',bold:true,size:11}),
+    rep(S1,9,10,1,2,{fg:C.rouge,bold:true,size:12,align:'RIGHT'}),
+    rep(S1,12,13,1,2,{fg:C.vert,align:'RIGHT'}),
+    rep(S1,16,22,1,2,{align:'RIGHT',size:10}),
+  ],'Pass 3 text/borders');
 
   // ── PARTAGE PUBLIC LECTURE ──
-  await fetch(`https://www.googleapis.com/drive/v3/files/${sid}/permissions`,{
+  st('st-week','Partage en cours...','loading');
+  const permRes = await fetch(`https://www.googleapis.com/drive/v3/files/${sid}/permissions`,{
     method:'POST',
     headers:{'Authorization':'Bearer '+gToken,'Content-Type':'application/json'},
     body:JSON.stringify({role:'reader',type:'anyone'})
   });
+  if(!permRes.ok){
+    const pe=await permRes.json();
+    const msg=pe.error?.message||permRes.status;
+    // Afficher l'erreur mais continuer — le sheet existe quand même
+    st('st-week','Sheet créé ✓ | Partage échoué : '+msg+' (activer Google Drive API dans Cloud Console)','err');
+    return sheetUrl;
+  }
 
   return sheetUrl;
 }
