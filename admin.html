@@ -1168,7 +1168,10 @@ async function createWeeklySheet(sessions, start, end){
     {updateBorders:{range:rng(S0,R4,RT+1,0,NC),
       innerHorizontal:{style:'SOLID',width:1,color:{red:.84,green:.82,blue:.78}},
       innerVertical:  {style:'SOLID',width:1,color:{red:.84,green:.82,blue:.78}},
-      outerBoundary:  {style:'SOLID_MEDIUM',width:2,color:C.or}}},
+      top:    {style:'SOLID_MEDIUM',width:2,color:C.or},
+      bottom: {style:'SOLID_MEDIUM',width:2,color:C.or},
+      left:   {style:'SOLID_MEDIUM',width:2,color:C.or},
+      right:  {style:'SOLID_MEDIUM',width:2,color:C.or}}},
     // RÉSUMÉ texte
     rep(S1,0,1,0,2,{fg:C.orClair,bold:true,size:15,align:'CENTER'}),
     rep(S1,1,2,0,2,{fg:C.or,size:10,align:'CENTER',italic:true}),
