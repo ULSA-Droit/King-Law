@@ -865,6 +865,7 @@ $('btn-wk-sheet').addEventListener('click',async()=>{
     const wTax=wd.reduce((a,s)=>a+s.priv_tax,0);
     const wCA  = wBC+wLS+wPN+wTax; // CA brut total
     const wImp = wPN+wTax;          // CA imposable = privé brut
+    const wTot = wBC+wLS+wPN;       // Total net
     const per=fmtDate(start)+' 21h – '+fmtDate(end)+' 21h';
     await sendEmbed(url,{
       title:"📊 King's Law — "+fmtDate(start)+' - '+fmtDate(end),
