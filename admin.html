@@ -863,8 +863,8 @@ $('btn-wk-sheet').addEventListener('click',async()=>{
     const wLS=wd.reduce((a,s)=>a+s.ls_total,0);
     const wPN=wd.reduce((a,s)=>a+s.priv_net,0);
     const wTax=wd.reduce((a,s)=>a+s.priv_tax,0);
-    const wDos=wd.reduce((a,s)=>a+s.bc_count+s.ls_count+s.priv_count,0);
-    const wTot=wBC+wLS+wPN;
+    const wCA  = wBC+wLS+wPN+wTax; // CA brut total
+    const wImp = wPN+wTax;          // CA imposable = privé brut
     const per=fmtDate(start)+' 21h – '+fmtDate(end)+' 21h';
     await sendEmbed(url,{
       title:"📊 King's Law — "+fmtDate(start)+' - '+fmtDate(end),
@@ -872,13 +872,15 @@ $('btn-wk-sheet').addEventListener('click',async()=>{
       color:0xC9A84C,
       description:"**Déclaration hebdomadaire · "+per+"**\n*Cliquez sur le titre pour ouvrir le Google Sheet*",
       fields:[
-        {name:"💰 Total net",value:fmt(wTot),inline:true},
-        {name:"📁 Sessions",value:String(wd.length),inline:true},
-        {name:"📋 Dossiers",value:String(wDos),inline:true},
-        {name:"⚖️ Commis BC",value:fmt(wBC),inline:true},
-        {name:"⚖️ Commis LS",value:fmt(wLS),inline:true},
-        {name:"🏛️ Privé net",value:fmt(wPN),inline:true},
-        {name:"💸 Taxe payée",value:fmt(wTax),inline:false}
+        {name:"💰 CA Total semaine",value:"**"+fmt(wCA)+" $**",inline:false},
+        {name:"⚖️ dont Commis BC",value:fmt(wBC)+' $',inline:true},
+        {name:"⚖️ dont Commis LS",value:fmt(wLS)+' $',inline:true},
+        {name:"\u200B",value:"\u200B",inline:true},
+        {name:"📋 CA Imposable (Privé brut)",value:"**"+fmt(wImp)+" $**",inline:false},
+        {name:"💸 Taxe 20%",value:"−"+fmt(wTax)+' $',inline:true},
+        {name:"🏛️ Net privé",value:fmt(wPN)+' $',inline:true},
+        {name:"\u200B",value:"\u200B",inline:true},
+        {name:"✅ Total net semaine",value:"**"+fmt(wTot)+" $**",inline:false},
       ],
       footer:{text:"King's Law · Cabinet Juridique · État de San Andreas"},
       timestamp:new Date().toISOString()
@@ -996,23 +998,23 @@ async function createWeeklySheet(sessions, start, end){
     ['TOTAL SEMAINE','',wBCn,'',wBC,wLSn,'',wLS,wPn,wPB,wTax,wPN,wTot,'']
   ];
 
+  const wCA = wBC+wLS+wPB; // CA brut total semaine
+
   const vals2=[
     ["King's Law — Resume Hebdomadaire",''],
     [per,''],['',''],
-    ['REVENUS','MONTANT ($)'],
-    ["Commis d'office BC (Nord)", wBC],
-    ["Commis d'office LS (Sud)", wLS],
-    ['Clients prives brut', wPB],['',''],
-    ['DEDUCTIONS',''],
-    ['Taxe professionnelle 20%', wTax],['',''],
+    ['CHIFFRE D\'AFFAIRES','MONTANT ($)'],
+    ['CA Total semaine', wCA],
+    ["dont Commis d'office BC (Nord)", wBC],
+    ["dont Commis d'office LS (Sud)", wLS],
+    ['',''],
+    ['CA IMPOSABLE',''],
+    ['CA imposable (Prive brut)', wPB],
+    ['Taxe professionnelle 20%', wTax],
+    ['',''],
     ['NET',''],
-    ['Prive net', wPN],
+    ['Prive net (apres taxe)', wPN],
     ['TOTAL NET SEMAINE', wTot],['',''],
-    ['STATISTIQUES',''],
-    ['Sessions', sessions.length],
-    ['Dossiers BC', wBCn],['Dossiers LS', wLSn],
-    ['Dossiers prives', wPn],
-    ['Total dossiers', wBCn+wLSn+wPn],['',''],
     ['Genere le', now]
   ];
 
@@ -1085,7 +1087,7 @@ async function createWeeklySheet(sessions, start, end){
     dimC(S0,9,10,95),dimC(S0,10,11,80),dimC(S0,11,12,95),dimC(S0,12,13,105),dimC(S0,13,14,180),
     dimR(S0,R0,R0+1,52),dimR(S0,R1,R1+1,26),dimR(S0,R3,R3+1,32),dimR(S0,R4,R4+1,46),dimR(S0,RT,RT+1,38),
     dimC(S1,0,1,260),dimC(S1,1,2,150),
-    dimR(S1,0,1,50),dimR(S1,1,2,28),dimR(S1,3,4,32),dimR(S1,8,9,32),dimR(S1,11,12,32),dimR(S1,13,14,44),dimR(S1,15,16,32),
+    dimR(S1,0,1,50),dimR(S1,1,2,28),dimR(S1,3,4,32),dimR(S1,8,9,32),dimR(S1,12,13,32),dimR(S1,14,15,44),
     frz(S0,R4+1),
   ],'Pass 1 merges/dims');
 
@@ -1124,12 +1126,18 @@ async function createWeeklySheet(sessions, start, end){
     rep(S0,RT,RT+1,12,13,{bg:C.vert}),
     // RÉSUMÉ
     rep(S1,0,1,0,2,{bg:C.noir}),rep(S1,1,2,0,2,{bg:C.noir2}),
-    rep(S1,3,4,0,2,{bg:C.or}),rep(S1,8,9,0,2,{bg:C.rouge}),
-    rep(S1,11,12,0,2,{bg:C.vert}),rep(S1,13,14,0,2,{bg:C.vert}),
-    rep(S1,15,16,0,2,{bg:C.noir2}),
-    rep(S1,4,5,0,2,{bg:C.bleuPale}),rep(S1,5,6,0,2,{bg:C.orPale2}),
-    rep(S1,6,7,0,2,{bg:C.gris1}),rep(S1,9,10,0,2,{bg:C.rougePale}),
-    rep(S1,12,13,0,2,{bg:C.vertPale}),rep(S1,16,22,0,2,{bg:C.gris1}),
+    // CA header (R3) or, CA total (R4) noir2, Commis BC (R5) bleuPale, Commis LS (R6) orPale2
+    rep(S1,3,4,0,2,{bg:C.or}),
+    rep(S1,4,5,0,2,{bg:C.noir2}),
+    rep(S1,5,6,0,2,{bg:C.bleuPale}),rep(S1,6,7,0,2,{bg:C.orPale2}),
+    // CA imposable header (R8) rouge, brut (R9) rougePale, taxe (R10) rougePale
+    rep(S1,8,9,0,2,{bg:C.rouge}),
+    rep(S1,9,10,0,2,{bg:C.rougePale}),rep(S1,10,11,0,2,{bg:C.rougePale}),
+    // NET header (R12) vert, net privé (R13) vertPale, total (R14) vert
+    rep(S1,12,13,0,2,{bg:C.vert}),
+    rep(S1,13,14,0,2,{bg:C.vertPale}),rep(S1,14,15,0,2,{bg:C.vert}),
+    // Généré le (R16)
+    rep(S1,16,17,0,2,{bg:C.noir2}),
   ],'Pass 2 backgrounds');
 
   // PASS 3 — Texte + alignement + bordures
@@ -1175,15 +1183,33 @@ async function createWeeklySheet(sessions, start, end){
     // RÉSUMÉ texte
     rep(S1,0,1,0,2,{fg:C.orClair,bold:true,size:15,align:'CENTER'}),
     rep(S1,1,2,0,2,{fg:C.or,size:10,align:'CENTER',italic:true}),
+    // Header CA (R3)
     rep(S1,3,4,0,2,{fg:C.noir,bold:true,size:10,align:'CENTER'}),
+    // CA Total (R4)
+    rep(S1,4,5,0,1,{fg:C.orClair,bold:true,size:10}),
+    rep(S1,4,5,1,2,{fg:C.orClair,bold:true,size:12,align:'RIGHT'}),
+    // Commis BC (R5) bleu, LS (R6) or
+    rep(S1,5,6,0,1,{fg:C.bleu,size:9,italic:true}),
+    rep(S1,5,6,1,2,{fg:C.bleu,bold:true,size:9,align:'RIGHT'}),
+    rep(S1,6,7,0,1,{fg:C.or,size:9,italic:true}),
+    rep(S1,6,7,1,2,{fg:C.or,bold:true,size:9,align:'RIGHT'}),
+    // Header CA imposable (R8)
     rep(S1,8,9,0,2,{fg:C.blanc,bold:true,size:10,align:'CENTER'}),
-    rep(S1,11,12,0,2,{fg:C.blanc,bold:true,size:10,align:'CENTER'}),
-    rep(S1,13,14,0,2,{fg:C.blanc,bold:true,size:14,align:'CENTER'}),
-    rep(S1,15,16,0,2,{fg:C.or,bold:true,size:10,align:'CENTER'}),
-    rep(S1,4,7,1,2,{align:'RIGHT',bold:true,size:11}),
-    rep(S1,9,10,1,2,{fg:C.rouge,bold:true,size:12,align:'RIGHT'}),
-    rep(S1,12,13,1,2,{fg:C.vert,align:'RIGHT'}),
-    rep(S1,16,22,1,2,{align:'RIGHT',size:10}),
+    // CA imposable brut (R9)
+    rep(S1,9,10,0,1,{fg:C.rouge,size:10}),
+    rep(S1,9,10,1,2,{fg:C.rouge,bold:true,size:11,align:'RIGHT'}),
+    // Taxe (R10)
+    rep(S1,10,11,0,1,{fg:C.rouge,size:9,italic:true}),
+    rep(S1,10,11,1,2,{fg:C.rouge,bold:true,size:10,align:'RIGHT'}),
+    // Header NET (R12)
+    rep(S1,12,13,0,2,{fg:C.blanc,bold:true,size:10,align:'CENTER'}),
+    // Net privé (R13)
+    rep(S1,13,14,0,1,{fg:C.vert,size:10}),
+    rep(S1,13,14,1,2,{fg:C.vert,align:'RIGHT',size:10}),
+    // TOTAL NET (R14)
+    rep(S1,14,15,0,2,{fg:C.blanc,bold:true,size:14,align:'CENTER'}),
+    // Généré le (R16)
+    rep(S1,16,17,0,2,{fg:C.muted,size:9,align:'CENTER',italic:true}),
   ],'Pass 3 text/borders');
 
   // ── PARTAGE PUBLIC LECTURE ──
