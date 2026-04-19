@@ -1004,13 +1004,12 @@ async function createWeeklySheet(sessions, start, end){
   const vals2=[
     ["King's Law — Resume Hebdomadaire",''],
     [per,''],['',''],
-    ['CHIFFRE D\'AFFAIRES','MONTANT ($)'],
-    ['CA Total semaine', wCA],
-    ["dont Commis d'office BC (Nord)", wBC],
+    ['CA BRUT TOTAL', wCA],
     ["dont Commis d'office LS (Sud)", wLS],
+    ["dont Commis d'office BC (Nord)", wBC],
+    ["dont Clients Prives (brut)", wPB],
     ['',''],
-    ['CA IMPOSABLE',''],
-    ['CA imposable (Prive brut)', wPB],
+    ['CA IMPOSABLE', wPB],
     ['Taxe professionnelle 20%', wTax],
     ['',''],
     ['NET',''],
@@ -1088,7 +1087,7 @@ async function createWeeklySheet(sessions, start, end){
     dimC(S0,9,10,95),dimC(S0,10,11,80),dimC(S0,11,12,95),dimC(S0,12,13,105),dimC(S0,13,14,180),
     dimR(S0,R0,R0+1,52),dimR(S0,R1,R1+1,26),dimR(S0,R3,R3+1,32),dimR(S0,R4,R4+1,46),dimR(S0,RT,RT+1,38),
     dimC(S1,0,1,260),dimC(S1,1,2,150),
-    dimR(S1,0,1,50),dimR(S1,1,2,28),dimR(S1,3,4,32),dimR(S1,8,9,32),dimR(S1,12,13,32),dimR(S1,14,15,44),
+    dimR(S1,0,1,50),dimR(S1,1,2,28),dimR(S1,3,4,42),dimR(S1,8,9,32),dimR(S1,11,12,32),dimR(S1,13,14,44),
     frz(S0,R4+1),
   ],'Pass 1 merges/dims');
 
@@ -1127,15 +1126,19 @@ async function createWeeklySheet(sessions, start, end){
     rep(S0,RT,RT+1,12,13,{bg:C.vert}),
     // RÉSUMÉ
     rep(S1,0,1,0,2,{bg:C.noir}),rep(S1,1,2,0,2,{bg:C.noir2}),
-    // CA header (R3) or, CA total (R4) noir2, Commis BC (R5) bleuPale, Commis LS (R6) orPale2
-    rep(S1,3,4,0,2,{bg:C.or}),
-    rep(S1,4,5,0,2,{bg:C.noir2}),
-    rep(S1,5,6,0,2,{bg:C.bleuPale}),rep(S1,6,7,0,2,{bg:C.orPale2}),
-    // CA imposable header (R8) rouge, brut (R9) rougePale, taxe (R10) rougePale
+    // CA BRUT TOTAL (R3) — fond noir or
+    rep(S1,3,4,0,2,{bg:C.noir}),
+    // Commis LS (R4) or pâle, Commis BC (R5) bleu pâle, Privé (R6) gris
+    rep(S1,4,5,0,2,{bg:C.orPale2}),
+    rep(S1,5,6,0,2,{bg:C.bleuPale}),
+    rep(S1,6,7,0,2,{bg:C.gris1}),
+    // CA IMPOSABLE header (R8) rouge
     rep(S1,8,9,0,2,{bg:C.rouge}),
+    // CA imposable (R9) rouge pâle, Taxe (R10) rouge pâle
     rep(S1,9,10,0,2,{bg:C.rougePale}),rep(S1,10,11,0,2,{bg:C.rougePale}),
-    // NET header (R12) vert, net privé (R13) vertPale, total (R14) vert
+    // NET header (R12) vert
     rep(S1,12,13,0,2,{bg:C.vert}),
+    // Net privé (R13) vert pâle, TOTAL (R14) vert fort
     rep(S1,13,14,0,2,{bg:C.vertPale}),rep(S1,14,15,0,2,{bg:C.vert}),
     // Généré le (R16)
     rep(S1,16,17,0,2,{bg:C.noir2}),
@@ -1184,25 +1187,25 @@ async function createWeeklySheet(sessions, start, end){
     // RÉSUMÉ texte
     rep(S1,0,1,0,2,{fg:C.orClair,bold:true,size:15,align:'CENTER'}),
     rep(S1,1,2,0,2,{fg:C.or,size:10,align:'CENTER',italic:true}),
-    // Header CA (R3)
-    rep(S1,3,4,0,2,{fg:C.noir,bold:true,size:10,align:'CENTER'}),
-    // CA Total (R4)
-    rep(S1,4,5,0,1,{fg:C.orClair,bold:true,size:10}),
-    rep(S1,4,5,1,2,{fg:C.orClair,bold:true,size:12,align:'RIGHT'}),
-    // Commis BC (R5) bleu, LS (R6) or
+    // CA BRUT TOTAL (R3) — gros, or sur fond noir
+    rep(S1,3,4,0,1,{fg:C.orClair,bold:true,size:11}),
+    rep(S1,3,4,1,2,{fg:C.orClair,bold:true,size:13,align:'RIGHT'}),
+    // Commis LS (R4) or, Commis BC (R5) bleu, Privé (R6) gris
+    rep(S1,4,5,0,1,{fg:C.or,size:9,italic:true}),
+    rep(S1,4,5,1,2,{fg:C.or,bold:true,size:10,align:'RIGHT'}),
     rep(S1,5,6,0,1,{fg:C.bleu,size:9,italic:true}),
-    rep(S1,5,6,1,2,{fg:C.bleu,bold:true,size:9,align:'RIGHT'}),
-    rep(S1,6,7,0,1,{fg:C.or,size:9,italic:true}),
-    rep(S1,6,7,1,2,{fg:C.or,bold:true,size:9,align:'RIGHT'}),
-    // Header CA imposable (R8)
+    rep(S1,5,6,1,2,{fg:C.bleu,bold:true,size:10,align:'RIGHT'}),
+    rep(S1,6,7,0,1,{fg:C.texte,size:9,italic:true}),
+    rep(S1,6,7,1,2,{fg:C.texte,bold:true,size:10,align:'RIGHT'}),
+    // CA IMPOSABLE header (R8)
     rep(S1,8,9,0,2,{fg:C.blanc,bold:true,size:10,align:'CENTER'}),
-    // CA imposable brut (R9)
+    // CA imposable (R9)
     rep(S1,9,10,0,1,{fg:C.rouge,size:10}),
     rep(S1,9,10,1,2,{fg:C.rouge,bold:true,size:11,align:'RIGHT'}),
     // Taxe (R10)
     rep(S1,10,11,0,1,{fg:C.rouge,size:9,italic:true}),
     rep(S1,10,11,1,2,{fg:C.rouge,bold:true,size:10,align:'RIGHT'}),
-    // Header NET (R12)
+    // NET header (R12)
     rep(S1,12,13,0,2,{fg:C.blanc,bold:true,size:10,align:'CENTER'}),
     // Net privé (R13)
     rep(S1,13,14,0,1,{fg:C.vert,size:10}),
