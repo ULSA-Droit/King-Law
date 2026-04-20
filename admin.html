@@ -380,10 +380,10 @@ textarea.f-input{resize:none;height:56px}
       <div class="page-sub">Sessions · Déclaration hebdomadaire — Sem. fiscale dim. 21h → dim. 21h</div>
     </div>
     <div class="stats-grid">
-      <div class="stat-card"><div class="stat-label">Sessions</div><div class="stat-val" id="stat-s">—</div></div>
       <div class="stat-card"><div class="stat-label">Revenus nets</div><div class="stat-val" id="stat-t">—</div></div>
       <div class="stat-card"><div class="stat-label">Dossiers BC</div><div class="stat-val" id="stat-bc">—</div></div>
       <div class="stat-card"><div class="stat-label">Dossiers LS</div><div class="stat-val" id="stat-ls">—</div></div>
+      <div class="stat-card"><div class="stat-label">Dossiers Privés</div><div class="stat-val" id="stat-priv">—</div></div>
     </div>
 
     <div class="week-card">
@@ -806,10 +806,10 @@ async function loadHistory(){
   const {data,error}=await sb.from('sessions').select('*').order('created_at',{ascending:false}).limit(200);
   if(error){ $('history-list').innerHTML='<div class="h-empty">Erreur chargement.</div>'; return; }
   allSessions=data||[];
-  $('stat-s').textContent=allSessions.length;
   $('stat-t').textContent=fmt(allSessions.reduce((a,s)=>a+s.grand_total,0));
   $('stat-bc').textContent=allSessions.reduce((a,s)=>a+s.bc_count,0);
   $('stat-ls').textContent=allSessions.reduce((a,s)=>a+s.ls_count,0);
+  $('stat-priv').textContent=allSessions.reduce((a,s)=>a+s.priv_count,0);
   renderWeek(); renderHistory();
 }
 
@@ -1002,20 +1002,20 @@ async function createWeeklySheet(sessions, start, end){
   const wCA = wBC+wLS+wPB; // CA brut total semaine
 
   const vals2=[
-    ["King's Law — Resume Hebdomadaire",''],
-    [per,''],['',''],
-    ['CA BRUT TOTAL', wCA],
-    ["dont Commis d'office LS (Sud)", wLS],
-    ["dont Commis d'office BC (Nord)", wBC],
-    ["dont Clients Prives (brut)", wPB],
-    ['',''],
-    ['CA IMPOSABLE', wPB],
-    ['Taxe professionnelle 20%', wTax],
-    ['',''],
-    ['NET',''],
-    ['Prive net (apres taxe)', wPN],
-    ['TOTAL NET SEMAINE', wTot],['',''],
-    ['Genere le', now]
+    ["King's Law — Resume Hebdomadaire",'',''],
+    [per,'',''],['','',''],
+    ['CA BRUT TOTAL', wCA,''],
+    ["dont Commis d'office LS (Sud)", wLS, wLS+wBC],
+    ["dont Commis d'office BC (Nord)", wBC, ''],
+    ["dont Clients Prives (brut)", wPB,''],
+    ['','',''],
+    ['CA IMPOSABLE', wPB,''],
+    ['Taxe professionnelle 20%', wTax,''],
+    ['','',''],
+    ['NET','',''],
+    ['Prive net (apres taxe)', wPN,''],
+    ['TOTAL NET SEMAINE', wTot,''],['','',''],
+    ['Genere le', now,'']
   ];
 
   // ── ÉCRITURE DES DONNÉES (batchUpdate — une seule requête, pas d'encodage URL) ──
@@ -1026,7 +1026,7 @@ async function createWeeklySheet(sessions, start, end){
       valueInputOption:'RAW',
       data:[
         {range:`Detail!A1:N${RT+1}`,   values:vals1},
-        {range:`Resume!A1:B${vals2.length}`, values:vals2}
+        {range:`Resume!A1:C${vals2.length}`, values:vals2}
       ]
     })
   });
@@ -1081,12 +1081,12 @@ async function createWeeklySheet(sessions, start, end){
     mrg(S0,R0,R0+1,0,NC), mrg(S0,R1,R1+1,0,NC),
     mrg(S0,R3,R3+1,0,5),  mrg(S0,R3,R3+1,5,9),
     mrg(S0,R3,R3+1,9,13), mrg(S0,R3,R3+1,13,NC),
-    mrg(S1,0,1,0,2), mrg(S1,1,2,0,2),
+    mrg(S1,0,1,0,3), mrg(S1,1,2,0,3),
     dimC(S0,0,1,100),dimC(S0,1,2,60),dimC(S0,2,3,65),dimC(S0,3,4,95),dimC(S0,4,5,95),
     dimC(S0,5,6,65),dimC(S0,6,7,95),dimC(S0,7,8,95),dimC(S0,8,9,60),
     dimC(S0,9,10,95),dimC(S0,10,11,80),dimC(S0,11,12,95),dimC(S0,12,13,105),dimC(S0,13,14,180),
     dimR(S0,R0,R0+1,52),dimR(S0,R1,R1+1,26),dimR(S0,R3,R3+1,32),dimR(S0,R4,R4+1,46),dimR(S0,RT,RT+1,38),
-    dimC(S1,0,1,260),dimC(S1,1,2,150),
+    dimC(S1,0,1,260),dimC(S1,1,2,150),dimC(S1,2,3,130),
     dimR(S1,0,1,50),dimR(S1,1,2,28),dimR(S1,3,4,42),dimR(S1,8,9,32),dimR(S1,11,12,32),dimR(S1,13,14,44),
     frz(S0,R4+1),
   ],'Pass 1 merges/dims');
@@ -1126,12 +1126,14 @@ async function createWeeklySheet(sessions, start, end){
     rep(S0,RT,RT+1,12,13,{bg:C.vert}),
     // RÉSUMÉ
     rep(S1,0,1,0,2,{bg:C.noir}),rep(S1,1,2,0,2,{bg:C.noir2}),
-    // CA BRUT TOTAL (R3) — fond noir or
-    rep(S1,3,4,0,2,{bg:C.noir}),
-    // Commis LS (R4) or pâle, Commis BC (R5) bleu pâle, Privé (R6) gris
-    rep(S1,4,5,0,2,{bg:C.orPale2}),
-    rep(S1,5,6,0,2,{bg:C.bleuPale}),
-    rep(S1,6,7,0,2,{bg:C.gris1}),
+    // CA BRUT TOTAL (R3) — fond noir or, merge sur 3 colonnes sinon garder A+B fusionnés
+    rep(S1,3,4,0,1,{bg:C.noir}),rep(S1,3,4,1,2,{bg:C.noir}),rep(S1,3,4,2,3,{bg:C.noir}),
+    // Commis LS (R4) or pâle + col C fond vert (total)
+    rep(S1,4,5,0,2,{bg:C.orPale2}),rep(S1,4,5,2,3,{bg:C.vert}),
+    // Commis BC (R5) bleu pâle, col C vide
+    rep(S1,5,6,0,3,{bg:C.bleuPale}),
+    // Privé (R6) gris
+    rep(S1,6,7,0,3,{bg:C.gris1}),
     // CA IMPOSABLE header (R8) rouge
     rep(S1,8,9,0,2,{bg:C.rouge}),
     // CA imposable (R9) rouge pâle, Taxe (R10) rouge pâle
@@ -1185,16 +1187,20 @@ async function createWeeklySheet(sessions, start, end){
       left:   {style:'SOLID_MEDIUM',width:2,color:C.or},
       right:  {style:'SOLID_MEDIUM',width:2,color:C.or}}},
     // RÉSUMÉ texte
-    rep(S1,0,1,0,2,{fg:C.orClair,bold:true,size:15,align:'CENTER'}),
-    rep(S1,1,2,0,2,{fg:C.or,size:10,align:'CENTER',italic:true}),
-    // CA BRUT TOTAL (R3) — gros, or sur fond noir
+    rep(S1,0,1,0,3,{fg:C.orClair,bold:true,size:15,align:'CENTER'}),
+    rep(S1,1,2,0,3,{fg:C.or,size:10,align:'CENTER',italic:true}),
+    // CA BRUT TOTAL (R3)
     rep(S1,3,4,0,1,{fg:C.orClair,bold:true,size:11}),
     rep(S1,3,4,1,2,{fg:C.orClair,bold:true,size:13,align:'RIGHT'}),
-    // Commis LS (R4) or, Commis BC (R5) bleu, Privé (R6) gris
+    rep(S1,3,4,2,3,{fg:C.orClair,size:9}),
+    // Commis LS (R4) or + col C = total commis (vert sur fond vert)
     rep(S1,4,5,0,1,{fg:C.or,size:9,italic:true}),
     rep(S1,4,5,1,2,{fg:C.or,bold:true,size:10,align:'RIGHT'}),
+    rep(S1,4,5,2,3,{fg:C.blanc,bold:true,size:11,align:'CENTER'}),
+    // Commis BC (R5) bleu
     rep(S1,5,6,0,1,{fg:C.bleu,size:9,italic:true}),
     rep(S1,5,6,1,2,{fg:C.bleu,bold:true,size:10,align:'RIGHT'}),
+    // Privé (R6) gris
     rep(S1,6,7,0,1,{fg:C.texte,size:9,italic:true}),
     rep(S1,6,7,1,2,{fg:C.texte,bold:true,size:10,align:'RIGHT'}),
     // CA IMPOSABLE header (R8)
