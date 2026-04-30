@@ -297,7 +297,7 @@ textarea.f-input{resize:none;height:56px}
         <div class="toggle-row" id="tr-bc">
           <div class="toggle-box"></div>
           <span class="toggle-text">Procès</span>
-          <span class="toggle-amount" id="ta-bc">$17,000</span>
+          <span class="toggle-amount" id="ta-bc">$15,000</span>
         </div>
         <div class="counter-row">
           <div class="counter-label">Dossiers</div>
@@ -555,7 +555,7 @@ CREATE TABLE services (
 // STATE & CONSTANTS
 // ══════════════════════════════════════════
 const S = { bc:{count:0,proces:false}, ls:{count:0,proces:false}, priv:{count:0} };
-const RATES = { compa:17000, proces:30000, priv:20000, tax:0.20 };
+const RATES = { bc_compa:15000, bc_proces:20000, ls_compa:17000, ls_proces:30000, priv:20000, tax:0.20 };
 let sb=null, allSessions=[], allServices=[], editingId=null;
 let mT={tax:false,vis:true}, activeFilter='all', wkOffset=0;
 let gToken=null, tokenClient=null;
@@ -665,8 +665,8 @@ window.addEventListener('load',()=>{ setTimeout(initGoogleAuth,1000); });
 
 // ── COMPTABILITÉ ───────────────────────────
 function calc(){
-  const rBC=S.bc.proces?RATES.proces:RATES.compa;
-  const rLS=S.ls.proces?RATES.proces:RATES.compa;
+  const rBC=S.bc.proces?RATES.bc_proces:RATES.bc_compa;
+  const rLS=S.ls.proces?RATES.ls_proces:RATES.ls_compa;
   const tBC=S.bc.count*rBC, tLS=S.ls.count*rLS;
   const pB=S.priv.count*RATES.priv, pT=Math.round(pB*RATES.tax), pN=pB-pT;
   return {tBC,tLS,pB,pT,pN,grand:tBC+tLS+pN};
@@ -686,7 +686,8 @@ function refreshCompta(){
   $('tr-'+z).addEventListener('click',()=>{
     S[z].proces=!S[z].proces;
     $('tr-'+z).classList.toggle('active',S[z].proces);
-    $('ta-'+z).textContent=S[z].proces?'$30,000':'$17,000';
+    const isLS = z==='ls';
+    $('ta-'+z).textContent=S[z].proces?(isLS?'$30,000':'$20,000'):(isLS?'$17,000':'$15,000');
     refreshCompta();
   });
 });
@@ -702,7 +703,8 @@ document.querySelectorAll('.counter-btn').forEach(btn=>{
 
 $('btn-reset').addEventListener('click',()=>{
   S.bc={count:0,proces:false}; S.ls={count:0,proces:false}; S.priv={count:0};
-  ['bc','ls'].forEach(z=>{ $('val-'+z).textContent=0; $('tr-'+z).classList.remove('active'); $('ta-'+z).textContent='$17,000'; });
+  $('val-bc').textContent=0; $('tr-bc').classList.remove('active'); $('ta-bc').textContent='$15,000';
+  $('val-ls').textContent=0; $('tr-ls').classList.remove('active'); $('ta-ls').textContent='$17,000';
   $('val-priv').textContent=0; $('session-note').value='';
   st('st-compta','',''); refreshCompta();
 });
