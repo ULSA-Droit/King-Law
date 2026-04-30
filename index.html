@@ -439,38 +439,7 @@ footer {
   <div class="tarif-grid" id="tarif-grid">
 
     <!-- Cartes par défaut — remplacées dynamiquement si Supabase connecté -->
-    <div class="tarif-card reveal default-card">
-      <div class="tarif-badge">Commis d'office</div>
-      <div class="tarif-name">Comparution immédiate</div>
-      <div class="tarif-price"><sup>$</sup>15,000</div>
-      <div class="tarif-note">
-        Représentation lors d'une comparution immédiate ou d'un plaider-coupable,
-        lorsque désigné d'office par les forces de l'ordre.
-      </div>
-      <span class="tarif-tag exo">Gratuit pour le client</span>
-    </div>
 
-    <div class="tarif-card featured reveal default-card">
-      <div class="tarif-badge">Commis d'office</div>
-      <div class="tarif-name">Procès</div>
-      <div class="tarif-price"><sup>$</sup>20,000</div>
-      <div class="tarif-note">
-        Représentation complète lors d'une audience contradictoire devant le tribunal,
-        incluant plaidoirie et contre-interrogatoire.
-      </div>
-      <span class="tarif-tag exo">Gratuit pour le client</span>
-    </div>
-
-    <div class="tarif-card reveal default-card">
-      <div class="tarif-badge">Client privé</div>
-      <div class="tarif-name">Mandat direct</div>
-      <div class="tarif-price"><sup>$</sup>20,000</div>
-      <div class="tarif-note">
-        Représentation sur mandat direct du client, toutes procédures confondues.
-        Taxe professionnelle de 20% applicable.
-      </div>
-      <span class="tarif-tag">Taxe 20% incluse</span>
-    </div>
 
   </div>
 </section>
@@ -690,8 +659,7 @@ async function loadServices() {
     const grid = document.getElementById('tarif-grid');
 
     // Toujours afficher les 2 commis par défaut en premier, sauf si Supabase en a déjà
-    const hasCommis = data.some(s => s.category === "Commis d'office");
-    const services  = hasCommis ? data : [...DEFAULT_SERVICES.slice(0, 2), ...data];
+    const services  = data;
 
     grid.innerHTML = services.map((svc, i) => renderServiceCard(svc, i, services.length)).join('');
 

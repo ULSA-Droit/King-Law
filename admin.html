@@ -297,7 +297,7 @@ textarea.f-input{resize:none;height:56px}
         <div class="toggle-row" id="tr-bc">
           <div class="toggle-box"></div>
           <span class="toggle-text">Procès</span>
-          <span class="toggle-amount" id="ta-bc">$15,000</span>
+          <span class="toggle-amount" id="ta-bc">$17,000</span>
         </div>
         <div class="counter-row">
           <div class="counter-label">Dossiers</div>
@@ -317,7 +317,7 @@ textarea.f-input{resize:none;height:56px}
         <div class="toggle-row" id="tr-ls">
           <div class="toggle-box"></div>
           <span class="toggle-text">Procès</span>
-          <span class="toggle-amount" id="ta-ls">$15,000</span>
+          <span class="toggle-amount" id="ta-ls">$17,000</span>
         </div>
         <div class="counter-row">
           <div class="counter-label">Dossiers</div>
@@ -555,7 +555,7 @@ CREATE TABLE services (
 // STATE & CONSTANTS
 // ══════════════════════════════════════════
 const S = { bc:{count:0,proces:false}, ls:{count:0,proces:false}, priv:{count:0} };
-const RATES = { compa:15000, proces:20000, priv:20000, tax:0.20 };
+const RATES = { compa:17000, proces:30000, priv:20000, tax:0.20 };
 let sb=null, allSessions=[], allServices=[], editingId=null;
 let mT={tax:false,vis:true}, activeFilter='all', wkOffset=0;
 let gToken=null, tokenClient=null;
@@ -686,7 +686,7 @@ function refreshCompta(){
   $('tr-'+z).addEventListener('click',()=>{
     S[z].proces=!S[z].proces;
     $('tr-'+z).classList.toggle('active',S[z].proces);
-    $('ta-'+z).textContent=S[z].proces?'$20,000':'$15,000';
+    $('ta-'+z).textContent=S[z].proces?'$30,000':'$17,000';
     refreshCompta();
   });
 });
@@ -702,7 +702,7 @@ document.querySelectorAll('.counter-btn').forEach(btn=>{
 
 $('btn-reset').addEventListener('click',()=>{
   S.bc={count:0,proces:false}; S.ls={count:0,proces:false}; S.priv={count:0};
-  ['bc','ls'].forEach(z=>{ $('val-'+z).textContent=0; $('tr-'+z).classList.remove('active'); $('ta-'+z).textContent='$15,000'; });
+  ['bc','ls'].forEach(z=>{ $('val-'+z).textContent=0; $('tr-'+z).classList.remove('active'); $('ta-'+z).textContent='$17,000'; });
   $('val-priv').textContent=0; $('session-note').value='';
   st('st-compta','',''); refreshCompta();
 });
